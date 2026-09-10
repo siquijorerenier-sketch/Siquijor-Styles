@@ -1,0 +1,33 @@
+# XAMPP / local server
+xampp/
+htdocs/
+
+# MySQL / MariaDB local data
+mysql/data/
+mysql/backup/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / editors
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# PHP/local cache
+cache/
+tmp/
+
+# Git
+.git/
