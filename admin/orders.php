@@ -19,6 +19,7 @@ if (
     exit;
 }
 
+
 /* =========================================================
    ESCAPE FUNCTION
 ========================================================= */
@@ -79,61 +80,464 @@ if (
 
     } else {
 
-        $stmt = $conn->prepare("
-            UPDATE orders
-            SET status = ?
-            WHERE id = ?
-            LIMIT 1
-        ");
+        $transaction_started = false;
+
+        try {
+
+            /*
+             * Use a transaction so the order status and
+             * product stock are changed together.
+             */
+            $conn->begin_transaction();
+            $transaction_started = true;
 
 
-        if (!$stmt) {
+            /*
+             * Lock the order while changing its status.
+             */
+            $stmt = $conn->prepare("
+                SELECT id, status
+                FROM orders
+                WHERE id = ?
+                LIMIT 1
+                FOR UPDATE
+            ");
 
-            $message =
-                "Unable to prepare the order update.";
-
-            $message_type = "error";
-
-        } else {
+            if (!$stmt) {
+                throw new Exception(
+                    "Unable to prepare the order lookup."
+                );
+            }
 
             $stmt->bind_param(
-                "si",
-                $new_status,
+                "i",
                 $order_id
             );
 
 
-            if ($stmt->execute()) {
+            if (!$stmt->execute()) {
 
-                if ($stmt->affected_rows > 0) {
+                $stmt->close();
 
-                    $message =
-                        "Order #" .
-                        $order_id .
-                        " status updated to " .
-                        $new_status .
-                        ".";
-
-                    $message_type = "success";
-
-                } else {
-
-                    $message =
-                        "No order was changed. The order may already have that status.";
-
-                    $message_type = "error";
-                }
-
-            } else {
-
-                $message =
-                    "Unable to update the order status.";
-
-                $message_type = "error";
+                throw new Exception(
+                    "Unable to load the order."
+                );
             }
 
 
+            $result = $stmt->get_result();
+
+            $order = $result->fetch_assoc();
+
             $stmt->close();
+
+
+            if (!$order) {
+
+                throw new Exception(
+                    "Order not found."
+                );
+            }
+
+
+            $old_status = $order["status"];
+
+
+            /*
+             * Nothing needs to be changed if the status
+             * is already the requested status.
+             */
+            if ($old_status === $new_status) {
+
+                $conn->commit();
+
+                $message =
+                    "Order #" .
+                    $order_id .
+                    " is already " .
+                    $new_status .
+                    ".";
+
+                $message_type = "success";
+
+            } else {
+
+
+                /* =================================================
+                   CANCEL ORDER
+                   Restore the ordered quantity to product stock.
+                ================================================= */
+
+                if (
+                    $new_status === "Cancelled" &&
+                    $old_status !== "Cancelled"
+                ) {
+
+                    $stmt = $conn->prepare("
+                        SELECT
+                            product_id,
+                            quantity
+                        FROM order_items
+                        WHERE order_id = ?
+                    ");
+
+                    if (!$stmt) {
+                        throw new Exception(
+                            "Unable to prepare the order items lookup."
+                        );
+                    }
+
+
+                    $stmt->bind_param(
+                        "i",
+                        $order_id
+                    );
+
+
+                    if (!$stmt->execute()) {
+
+                        $stmt->close();
+
+                        throw new Exception(
+                            "Unable to load the order items."
+                        );
+                    }
+
+
+                    $items_result =
+                        $stmt->get_result();
+
+
+                    /*
+                     * Prepare stock restoration query.
+                     */
+                    $stock_stmt = $conn->prepare("
+                        UPDATE products
+                        SET stock = stock + ?
+                        WHERE id = ?
+                    ");
+
+
+                    if (!$stock_stmt) {
+
+                        $stmt->close();
+
+                        throw new Exception(
+                            "Unable to prepare the stock restoration."
+                        );
+                    }
+
+
+                    while (
+                        $item =
+                        $items_result->fetch_assoc()
+                    ) {
+
+                        $product_id =
+                            (int) $item["product_id"];
+
+                        $quantity =
+                            (int) $item["quantity"];
+
+
+                        /*
+                         * Ignore invalid order-item values.
+                         */
+                        if (
+                            $product_id <= 0 ||
+                            $quantity <= 0
+                        ) {
+                            continue;
+                        }
+
+
+                        $stock_stmt->bind_param(
+                            "ii",
+                            $quantity,
+                            $product_id
+                        );
+
+
+                        if (!$stock_stmt->execute()) {
+
+                            $stock_stmt->close();
+                            $stmt->close();
+
+                            throw new Exception(
+                                "Unable to restore product stock."
+                            );
+                        }
+                    }
+
+
+                    $stock_stmt->close();
+                    $stmt->close();
+                }
+
+
+                /* =================================================
+                   REOPEN CANCELLED ORDER
+                   Deduct stock again when changing a cancelled
+                   order back to an active status.
+                ================================================= */
+
+                elseif (
+                    $old_status === "Cancelled" &&
+                    $new_status !== "Cancelled"
+                ) {
+
+                    $stmt = $conn->prepare("
+                        SELECT
+                            oi.product_id,
+                            oi.product_name,
+                            oi.quantity,
+                            p.stock
+                        FROM order_items oi
+                        INNER JOIN products p
+                            ON p.id = oi.product_id
+                        WHERE oi.order_id = ?
+                        FOR UPDATE
+                    ");
+
+
+                    if (!$stmt) {
+
+                        throw new Exception(
+                            "Unable to prepare the stock check."
+                        );
+                    }
+
+
+                    $stmt->bind_param(
+                        "i",
+                        $order_id
+                    );
+
+
+                    if (!$stmt->execute()) {
+
+                        $stmt->close();
+
+                        throw new Exception(
+                            "Unable to check product stock."
+                        );
+                    }
+
+
+                    $items_result =
+                        $stmt->get_result();
+
+
+                    $items = [];
+
+
+                    while (
+                        $item =
+                        $items_result->fetch_assoc()
+                    ) {
+
+                        $items[] = $item;
+                    }
+
+
+                    $stmt->close();
+
+
+                    /*
+                     * Check all products before deducting
+                     * anything. This prevents a partial stock
+                     * deduction if one product does not have
+                     * enough stock.
+                     */
+                    foreach ($items as $item) {
+
+                        $product_name =
+                            $item["product_name"];
+
+                        $quantity =
+                            (int) $item["quantity"];
+
+                        $current_stock =
+                            (int) $item["stock"];
+
+
+                        if (
+                            $current_stock <
+                            $quantity
+                        ) {
+
+                            throw new Exception(
+                                "Not enough stock for " .
+                                $product_name .
+                                ". Available: " .
+                                $current_stock .
+                                ", required: " .
+                                $quantity .
+                                "."
+                            );
+                        }
+                    }
+
+
+                    /*
+                     * Deduct stock.
+                     */
+                    $stock_stmt = $conn->prepare("
+                        UPDATE products
+                        SET stock = stock - ?
+                        WHERE id = ?
+                          AND stock >= ?
+                    ");
+
+
+                    if (!$stock_stmt) {
+
+                        throw new Exception(
+                            "Unable to prepare the stock update."
+                        );
+                    }
+
+
+                    foreach ($items as $item) {
+
+                        $product_id =
+                            (int) $item["product_id"];
+
+                        $quantity =
+                            (int) $item["quantity"];
+
+
+                        $stock_stmt->bind_param(
+                            "iii",
+                            $quantity,
+                            $product_id,
+                            $quantity
+                        );
+
+
+                        if (!$stock_stmt->execute()) {
+
+                            $stock_stmt->close();
+
+                            throw new Exception(
+                                "Unable to update product stock."
+                            );
+                        }
+
+
+                        /*
+                         * If exactly one row was not changed,
+                         * the stock may have changed unexpectedly.
+                         */
+                        if (
+                            $stock_stmt->affected_rows !== 1
+                        ) {
+
+                            $stock_stmt->close();
+
+                            throw new Exception(
+                                "Stock changed while processing the order. Please try again."
+                            );
+                        }
+                    }
+
+
+                    $stock_stmt->close();
+                }
+
+
+                /* =================================================
+                   UPDATE ORDER STATUS
+                ================================================= */
+
+                $stmt = $conn->prepare("
+                    UPDATE orders
+                    SET status = ?
+                    WHERE id = ?
+                    LIMIT 1
+                ");
+
+
+                if (!$stmt) {
+
+                    throw new Exception(
+                        "Unable to prepare the order status update."
+                    );
+                }
+
+
+                $stmt->bind_param(
+                    "si",
+                    $new_status,
+                    $order_id
+                );
+
+
+                if (!$stmt->execute()) {
+
+                    $stmt->close();
+
+                    throw new Exception(
+                        "Unable to update the order status."
+                    );
+                }
+
+
+                $stmt->close();
+
+
+                /*
+                 * Everything succeeded.
+                 */
+                $conn->commit();
+
+
+                $message =
+                    "Order #" .
+                    $order_id .
+                    " status updated from " .
+                    $old_status .
+                    " to " .
+                    $new_status .
+                    ".";
+
+
+                if (
+                    $new_status === "Cancelled"
+                ) {
+
+                    $message .=
+                        " Product stock has been restored.";
+                }
+
+
+                if (
+                    $old_status === "Cancelled" &&
+                    $new_status !== "Cancelled"
+                ) {
+
+                    $message .=
+                        " Product stock has been deducted again.";
+                }
+
+
+                $message_type = "success";
+            }
+
+        } catch (Throwable $e) {
+
+            if ($transaction_started) {
+                $conn->rollback();
+            }
+
+
+            $message =
+                "Unable to update order #" .
+                $order_id .
+                ". " .
+                $e->getMessage();
+
+            $message_type = "error";
         }
     }
 }
@@ -193,16 +597,17 @@ if (!empty($orders)) {
 
     $order_ids = [];
 
+
     foreach ($orders as $order) {
 
-        $order_ids[] = (int) $order["id"];
+        $order_ids[] =
+            (int) $order["id"];
     }
 
 
     /*
-       Build a safe integer-only IN() list.
-    */
-
+     * Build a safe integer-only IN() list.
+     */
     $order_id_list = implode(
         ",",
         array_map(
@@ -227,22 +632,33 @@ if (!empty($orders)) {
     ";
 
 
-    $items_result = $conn->query($items_sql);
+    $items_result =
+        $conn->query($items_sql);
 
 
     if ($items_result) {
 
-        while ($item = $items_result->fetch_assoc()) {
+        while (
+            $item =
+            $items_result->fetch_assoc()
+        ) {
 
-            $order_id = (int) $item["order_id"];
+            $order_id =
+                (int) $item["order_id"];
 
-            if (!isset($order_items[$order_id])) {
+
+            if (
+                !isset(
+                    $order_items[$order_id]
+                )
+            ) {
 
                 $order_items[$order_id] = [];
             }
 
 
-            $order_items[$order_id][] = $item;
+            $order_items[$order_id][] =
+                $item;
         }
 
 
@@ -258,13 +674,9 @@ if (!empty($orders)) {
 $total_orders = count($orders);
 
 $pending_orders = 0;
-
 $processing_orders = 0;
-
 $shipped_orders = 0;
-
 $delivered_orders = 0;
-
 $cancelled_orders = 0;
 
 $total_revenue = 0.00;
@@ -272,7 +684,8 @@ $total_revenue = 0.00;
 
 foreach ($orders as $order) {
 
-    $status = $order["status"];
+    $status =
+        $order["status"];
 
 
     switch ($status) {
@@ -998,108 +1411,123 @@ $admin_name =
             color: #6d625a;
 
             font-size: 12px;
-
-            white-space: nowrap;
         }
 
 
-        .item-subtotal {
+        .item-price {
 
             font-size: 13px;
 
             font-weight: 700;
 
             white-space: nowrap;
-        }
-
-
-        .order-total {
-
-            display: flex;
-
-            align-items: center;
-
-            justify-content: space-between;
-
-            margin-top: 15px;
-
-            padding-top: 15px;
-
-            border-top: 1px solid #eee7e0;
-        }
-
-
-        .order-total-label {
-
-            font-size: 13px;
-
-            font-weight: 700;
-        }
-
-
-        .order-total-value {
-
-            font-size: 20px;
-
-            font-weight: 700;
         }
 
 
         /* =================================================
-           CUSTOMER / SHIPPING
+           CUSTOMER INFORMATION
         ================================================= */
 
         .info-box {
-
-            padding: 15px;
-
-            border-radius: 10px;
 
             background: #faf8f5;
 
             border: 1px solid #eee7e0;
 
-            margin-bottom: 12px;
+            border-radius: 10px;
+
+            padding: 14px;
+        }
+
+
+        .info-row {
+
+            display: flex;
+
+            justify-content: space-between;
+
+            gap: 15px;
+
+            padding: 8px 0;
+
+            border-bottom: 1px solid
+                #eee7e0;
+
+            font-size: 12px;
+        }
+
+
+        .info-row:last-child {
+
+            border-bottom: 0;
+
+            padding-bottom: 0;
+        }
+
+
+        .info-row:first-child {
+
+            padding-top: 0;
         }
 
 
         .info-label {
 
-            margin-bottom: 5px;
+            color: #91867e;
 
-            color: #938980;
-
-            font-size: 10px;
-
-            text-transform: uppercase;
-
-            letter-spacing: 0.6px;
+            flex-shrink: 0;
         }
 
 
         .info-value {
 
-            color: #4c443d;
+            color: #433c36;
+
+            text-align: right;
+
+            word-break: break-word;
+        }
+
+
+        /* =================================================
+           TOTAL
+        ================================================= */
+
+        .order-total {
+
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            gap: 15px;
+
+            margin-top: 15px;
+
+            padding-top: 15px;
+
+            border-top: 1px solid #e8e0d8;
+        }
+
+
+        .total-label {
+
+            color: #71675f;
 
             font-size: 13px;
 
-            line-height: 1.55;
-
-            white-space: pre-line;
+            font-weight: 600;
         }
 
 
-        .info-value a {
+        .total-value {
 
-            color: #765f49;
+            font-size: 20px;
 
-            text-decoration: none;
-        }
+            font-weight: 700;
 
-
-        .info-value a:hover {
-
-            text-decoration: underline;
+            color: #2f2a25;
         }
 
 
@@ -1109,39 +1537,51 @@ $admin_name =
 
         .status-form {
 
-            display: flex;
+            margin-top: 18px;
 
-            align-items: center;
+            padding-top: 18px;
 
-            gap: 10px;
-
-            margin-top: 12px;
-
-            padding-top: 15px;
-
-            border-top: 1px solid #eee7e0;
+            border-top: 1px solid #e8e0d8;
         }
 
 
-        .status-form select {
+        .status-form label {
+
+            display: block;
+
+            margin-bottom: 7px;
+
+            color: #6e645c;
+
+            font-size: 12px;
+
+            font-weight: 600;
+        }
+
+
+        .status-form-row {
+
+            display: flex;
+
+            gap: 9px;
+        }
+
+
+        .status-select {
 
             flex: 1;
 
             min-width: 0;
 
-            height: 42px;
+            padding: 10px 11px;
 
-            padding: 0 11px;
-
-            border: 1px solid #d8d0c7;
+            border: 1px solid #dcd3ca;
 
             border-radius: 8px;
 
             background: #ffffff;
 
-            color: #3d362f;
-
-            font-family: inherit;
+            color: #413a34;
 
             font-size: 12px;
 
@@ -1149,55 +1589,97 @@ $admin_name =
         }
 
 
-        .status-form select:focus {
+        .status-select:focus {
 
-            border-color: #9d7958;
+            border-color: #a99b90;
 
             box-shadow:
                 0 0 0 3px
-                rgba(157,121,88,0.10);
+                rgba(169,155,144,0.12);
         }
 
 
-        .status-button {
+        .update-button {
 
-            height: 42px;
-
-            padding: 0 15px;
-
-            border: none;
+            border: 0;
 
             border-radius: 8px;
+
+            padding: 10px 14px;
 
             background: #2f2a25;
 
             color: #ffffff;
-
-            font-family: inherit;
 
             font-size: 12px;
 
             font-weight: 700;
 
             cursor: pointer;
+
+            white-space: nowrap;
         }
 
 
-        .status-button:hover {
+        .update-button:hover {
 
-            background: #4b4138;
+            background: #4a423b;
         }
 
 
         /* =================================================
-           EMPTY
+           NOTES
+        ================================================= */
+
+        .notes-box {
+
+            margin-top: 14px;
+
+            padding: 12px;
+
+            border-radius: 9px;
+
+            background: #fffdf9;
+
+            border: 1px solid #eee7e0;
+        }
+
+
+        .notes-label {
+
+            margin-bottom: 5px;
+
+            color: #8c8178;
+
+            font-size: 11px;
+
+            font-weight: 700;
+
+            text-transform: uppercase;
+
+            letter-spacing: 0.5px;
+        }
+
+
+        .notes-text {
+
+            color: #5d544d;
+
+            font-size: 12px;
+
+            line-height: 1.5;
+
+            white-space: pre-wrap;
+
+            word-break: break-word;
+        }
+
+
+        /* =================================================
+           EMPTY STATE
         ================================================= */
 
         .empty-state {
-
-            padding: 60px 25px;
-
-            text-align: center;
 
             background: #ffffff;
 
@@ -1205,21 +1687,41 @@ $admin_name =
 
             border-radius: 15px;
 
-            color: #8f857c;
+            padding: 55px 25px;
 
-            font-size: 13px;
+            text-align: center;
+
+            box-shadow:
+                0 5px 18px
+                rgba(47,42,37,0.04);
         }
 
 
-        .empty-state strong {
+        .empty-icon {
 
-            display: block;
+            font-size: 40px;
 
-            margin-bottom: 7px;
+            margin-bottom: 12px;
 
-            color: #4d443d;
+            opacity: 0.65;
+        }
 
-            font-size: 18px;
+
+        .empty-state h2 {
+
+            margin: 0 0 7px;
+
+            font-size: 19px;
+        }
+
+
+        .empty-state p {
+
+            margin: 0;
+
+            color: #837971;
+
+            font-size: 13px;
         }
 
 
@@ -1227,28 +1729,38 @@ $admin_name =
            RESPONSIVE
         ================================================= */
 
-        @media (max-width: 1200px) {
+        @media (max-width: 1250px) {
 
             .summary-grid {
 
                 grid-template-columns:
                     repeat(3, minmax(0, 1fr));
             }
-
         }
 
 
-        @media (max-width: 1000px) {
+        @media (max-width: 950px) {
+
+            .sidebar {
+
+                width: 210px;
+            }
+
+
+            .main-content {
+
+                padding: 22px;
+            }
+
 
             .order-grid {
 
                 grid-template-columns: 1fr;
             }
-
         }
 
 
-        @media (max-width: 800px) {
+        @media (max-width: 700px) {
 
             .admin-layout {
 
@@ -1268,11 +1780,7 @@ $admin_name =
 
             .sidebar-logo {
 
-                justify-content: flex-start;
-
                 margin-bottom: 15px;
-
-                padding-bottom: 15px;
             }
 
 
@@ -1287,35 +1795,19 @@ $admin_name =
 
             .sidebar-bottom {
 
-                margin-top: 15px;
+                margin-top: 18px;
             }
 
 
             .main-content {
 
-                padding: 20px;
-            }
-
-        }
-
-
-        @media (max-width: 600px) {
-
-            .main-content {
-
-                padding: 15px;
+                padding: 18px;
             }
 
 
             .topbar {
 
                 flex-direction: column;
-            }
-
-
-            .topbar h1 {
-
-                font-size: 25px;
             }
 
 
@@ -1326,38 +1818,65 @@ $admin_name =
             }
 
 
+            .order-header {
+
+                flex-direction: column;
+            }
+        }
+
+
+        @media (max-width: 480px) {
+
+            .summary-grid {
+
+                grid-template-columns: 1fr;
+            }
+
+
             .admin-nav {
 
                 grid-template-columns: 1fr;
             }
 
 
-            .order-header {
-
-                flex-direction: column;
-            }
-
-
             .item {
 
                 grid-template-columns: 1fr;
+
+                gap: 5px;
             }
 
 
-            .status-form {
+            .item-price {
+
+                text-align: left;
+            }
+
+
+            .status-form-row {
 
                 flex-direction: column;
-
-                align-items: stretch;
             }
 
 
-            .status-form select,
-            .status-button {
+            .update-button {
 
                 width: 100%;
             }
 
+
+            .info-row {
+
+                flex-direction: column;
+
+                gap: 4px;
+            }
+
+
+            .info-value {
+
+                text-align: left;
+            }
         }
 
     </style>
@@ -1366,7 +1885,6 @@ $admin_name =
 
 
 <body>
-
 
 <div class="admin-layout">
 
@@ -1409,29 +1927,28 @@ $admin_name =
         <nav class="admin-nav">
 
 
-            <a href="index.php">
+            <a href="dashboard.php">
 
-                <span class="nav-icon">⌂</span>
+                <span class="nav-icon">
+                    🏠
+                </span>
 
-                Dashboard
+                <span>
+                    Dashboard
+                </span>
 
             </a>
 
 
             <a href="products.php">
 
-                <span class="nav-icon">▣</span>
+                <span class="nav-icon">
+                    📦
+                </span>
 
-                Products
-
-            </a>
-
-
-            <a href="users.php">
-
-                <span class="nav-icon">♙</span>
-
-                Customers
+                <span>
+                    Products
+                </span>
 
             </a>
 
@@ -1441,9 +1958,26 @@ $admin_name =
                 class="active"
             >
 
-                <span class="nav-icon">▤</span>
+                <span class="nav-icon">
+                    🧾
+                </span>
 
-                Orders
+                <span>
+                    Orders
+                </span>
+
+            </a>
+
+
+            <a href="users.php">
+
+                <span class="nav-icon">
+                    👥
+                </span>
+
+                <span>
+                    Users
+                </span>
 
             </a>
 
@@ -1458,7 +1992,7 @@ $admin_name =
                 href="../index.php"
                 class="bottom-link"
             >
-                View Website
+                View Store
             </a>
 
 
@@ -1466,7 +2000,7 @@ $admin_name =
                 href="logout.php"
                 class="bottom-link"
             >
-                Log Out
+                Logout
             </a>
 
 
@@ -1483,8 +2017,6 @@ $admin_name =
     <main class="main-content">
 
 
-        <!-- TOPBAR -->
-
         <div class="topbar">
 
 
@@ -1495,7 +2027,7 @@ $admin_name =
                 </h1>
 
                 <p>
-                    Review customer purchases and manage order status.
+                    Manage customer orders and update their status.
                 </p>
 
             </div>
@@ -1505,7 +2037,7 @@ $admin_name =
                 href="../index.php"
                 class="view-site"
             >
-                View Store →
+                View Store
             </a>
 
 
@@ -1513,29 +2045,10 @@ $admin_name =
 
 
         <!-- =================================================
-             MESSAGE
-        ================================================== -->
-
-        <?php if ($message !== ""): ?>
-
-            <div
-                class="message <?= $message_type === "success"
-                    ? "success-message"
-                    : "error-message" ?>"
-            >
-
-                <?= e($message) ?>
-
-            </div>
-
-        <?php endif; ?>
-
-
-        <!-- =================================================
              SUMMARY
         ================================================== -->
 
-        <section class="summary-grid">
+        <div class="summary-grid">
 
 
             <div class="summary-card">
@@ -1606,31 +2119,66 @@ $admin_name =
             <div class="summary-card">
 
                 <div class="summary-label">
-                    Revenue
+                    Cancelled
                 </div>
 
                 <div class="summary-value">
-                    ₱<?= number_format($total_revenue, 2) ?>
+                    <?= number_format($cancelled_orders) ?>
                 </div>
 
             </div>
 
 
-        </section>
+        </div>
+
+
+        <?php if ($message !== ""): ?>
+
+            <div
+                class="message
+                <?= $message_type === "success"
+                    ? "success-message"
+                    : "error-message" ?>"
+            >
+
+                <?= e($message) ?>
+
+            </div>
+
+        <?php endif; ?>
 
 
         <!-- =================================================
              ORDERS
         ================================================== -->
 
-        <?php if (!empty($orders)): ?>
+        <div class="orders-list">
 
 
-            <div class="orders-list">
+            <?php if (empty($orders)): ?>
+
+
+                <div class="empty-state">
+
+                    <div class="empty-icon">
+                        🧾
+                    </div>
+
+                    <h2>
+                        No orders yet
+                    </h2>
+
+                    <p>
+                        Customer orders will appear here.
+                    </p>
+
+                </div>
+
+
+            <?php else: ?>
 
 
                 <?php foreach ($orders as $order): ?>
-
 
                     <?php
 
@@ -1640,28 +2188,18 @@ $admin_name =
                     $status =
                         $order["status"];
 
+                    $status_class =
+                        strtolower(
+                            str_replace(
+                                " ",
+                                "-",
+                                $status
+                            )
+                        );
 
-                    $status_class = match ($status) {
-
-                        "Pending" =>
-                            "status-pending",
-
-                        "Processing" =>
-                            "status-processing",
-
-                        "Shipped" =>
-                            "status-shipped",
-
-                        "Delivered" =>
-                            "status-delivered",
-
-                        "Cancelled" =>
-                            "status-cancelled",
-
-                        default =>
-                            ""
-                    };
-
+                    $items =
+                        $order_items[$order_id]
+                        ?? [];
 
                     ?>
 
@@ -1669,15 +2207,10 @@ $admin_name =
                     <article class="order-card">
 
 
-                        <!-- =================================
-                             ORDER HEADER
-                        ================================== -->
-
                         <div class="order-header">
 
 
                             <div>
-
 
                                 <div class="order-number">
 
@@ -1688,11 +2221,9 @@ $admin_name =
 
                                 <div class="order-date">
 
-                                    Placed:
-
                                     <?= e(
                                         date(
-                                            "F d, Y • h:i A",
+                                            "M d, Y h:i A",
                                             strtotime(
                                                 $order["created_at"]
                                             )
@@ -1712,34 +2243,24 @@ $admin_name =
                                         ) ?>
                                     </strong>
 
-                                    —
-                                    <?= e(
-                                        $order["customer_email"]
-                                    ) ?>
-
                                 </div>
 
-
                             </div>
 
 
-                            <div>
+                            <span
+                                class="status status-<?= e(
+                                    $status_class
+                                ) ?>"
+                            >
 
-                                <span
-                                    class="status <?= e($status_class) ?>"
-                                >
-                                    <?= e($status) ?>
-                                </span>
+                                <?= e($status) ?>
 
-                            </div>
+                            </span>
 
 
                         </div>
 
-
-                        <!-- =================================
-                             ORDER BODY
-                        ================================== -->
 
                         <div class="order-body">
 
@@ -1747,31 +2268,25 @@ $admin_name =
                             <div class="order-grid">
 
 
-                                <!-- ITEMS -->
+                                <!-- =================================
+                                     ORDER ITEMS
+                                ================================== -->
 
                                 <div>
 
 
                                     <h3 class="section-title">
-                                        Ordered Items
+                                        Order Items
                                     </h3>
 
 
-                                    <?php if (
-                                        !empty(
-                                            $order_items[$order_id]
-                                        )
-                                    ): ?>
+                                    <?php if (!empty($items)): ?>
 
 
                                         <div class="item-list">
 
 
-                                            <?php foreach (
-                                                $order_items[$order_id]
-                                                as $item
-                                            ): ?>
-
+                                            <?php foreach ($items as $item): ?>
 
                                                 <div class="item">
 
@@ -1804,14 +2319,12 @@ $admin_name =
                                                     <div class="item-quantity">
 
                                                         ×
-                                                        <?= number_format(
-                                                            (int) $item["quantity"]
-                                                        ) ?>
+                                                        <?= (int) $item["quantity"] ?>
 
                                                     </div>
 
 
-                                                    <div class="item-subtotal">
+                                                    <div class="item-price">
 
                                                         ₱<?= number_format(
                                                             (float) $item["subtotal"],
@@ -1823,7 +2336,6 @@ $admin_name =
 
                                                 </div>
 
-
                                             <?php endforeach; ?>
 
 
@@ -1833,10 +2345,10 @@ $admin_name =
                                     <?php else: ?>
 
 
-                                        <div class="item">
+                                        <div class="info-box">
 
-                                            <div class="item-name">
-                                                No order items found.
+                                            <div class="info-value">
+                                                No items found for this order.
                                             </div>
 
                                         </div>
@@ -1848,31 +2360,143 @@ $admin_name =
                                     <div class="order-total">
 
 
-                                        <span class="order-total-label">
+                                        <div class="total-label">
                                             Order Total
-                                        </span>
+                                        </div>
 
 
-                                        <span class="order-total-value">
+                                        <div class="total-value">
 
                                             ₱<?= number_format(
                                                 (float) $order["total_amount"],
                                                 2
                                             ) ?>
 
-                                        </span>
+                                        </div>
 
 
                                     </div>
 
 
-                                    <!-- STATUS UPDATE -->
+                                </div>
+
+
+                                <!-- =================================
+                                     CUSTOMER / SHIPPING INFORMATION
+                                ================================== -->
+
+                                <div>
+
+
+                                    <h3 class="section-title">
+                                        Customer & Shipping
+                                    </h3>
+
+
+                                    <div class="info-box">
+
+
+                                        <div class="info-row">
+
+                                            <span class="info-label">
+                                                Name
+                                            </span>
+
+                                            <span class="info-value">
+                                                <?= e(
+                                                    $order["shipping_name"]
+                                                ) ?>
+                                            </span>
+
+                                        </div>
+
+
+                                        <div class="info-row">
+
+                                            <span class="info-label">
+                                                Email
+                                            </span>
+
+                                            <span class="info-value">
+                                                <?= e(
+                                                    $order["shipping_email"]
+                                                ) ?>
+                                            </span>
+
+                                        </div>
+
+
+                                        <div class="info-row">
+
+                                            <span class="info-label">
+                                                Phone
+                                            </span>
+
+                                            <span class="info-value">
+                                                <?= e(
+                                                    $order["shipping_phone"]
+                                                ) ?>
+                                            </span>
+
+                                        </div>
+
+
+                                        <div class="info-row">
+
+                                            <span class="info-label">
+                                                Address
+                                            </span>
+
+                                            <span class="info-value">
+                                                <?= e(
+                                                    $order["shipping_address"]
+                                                ) ?>
+                                            </span>
+
+                                        </div>
+
+
+                                    </div>
+
+
+                                    <?php if (
+                                        trim(
+                                            (string) $order["notes"]
+                                        ) !== ""
+                                    ): ?>
+
+
+                                        <div class="notes-box">
+
+
+                                            <div class="notes-label">
+                                                Notes
+                                            </div>
+
+
+                                            <div class="notes-text">
+
+                                                <?= e(
+                                                    $order["notes"]
+                                                ) ?>
+
+                                            </div>
+
+
+                                        </div>
+
+
+                                    <?php endif; ?>
+
+
+                                    <!-- =================================
+                                         STATUS UPDATE
+                                    ================================== -->
 
                                     <form
                                         method="POST"
                                         class="status-form"
                                     >
-
 
                                         <input
                                             type="hidden"
@@ -1888,213 +2512,62 @@ $admin_name =
                                         >
 
 
-                                        <select
-                                            name="status"
-                                            aria-label="Update order status"
+                                        <label
+                                            for="status-<?= $order_id ?>"
                                         >
+                                            Update Order Status
+                                        </label>
 
 
-                                            <?php foreach (
-                                                $allowed_statuses
-                                                as $allowed_status
-                                            ): ?>
-
-                                                <option
-                                                    value="<?= e($allowed_status) ?>"
-                                                    <?= $status === $allowed_status
-                                                        ? "selected"
-                                                        : "" ?>
-                                                >
-
-                                                    <?= e($allowed_status) ?>
-
-                                                </option>
-
-                                            <?php endforeach; ?>
+                                        <div class="status-form-row">
 
 
-                                        </select>
+                                            <select
+                                                id="status-<?= $order_id ?>"
+                                                name="status"
+                                                class="status-select"
+                                            >
 
 
-                                        <button
-                                            type="submit"
-                                            class="status-button"
-                                        >
-                                            Update Status
-                                        </button>
+                                                <?php foreach (
+                                                    $allowed_statuses
+                                                    as $allowed_status
+                                                ): ?>
+
+                                                    <option
+                                                        value="<?= e(
+                                                            $allowed_status
+                                                        ) ?>"
+                                                        <?= $status ===
+                                                            $allowed_status
+                                                            ? "selected"
+                                                            : "" ?>
+                                                    >
+
+                                                        <?= e(
+                                                            $allowed_status
+                                                        ) ?>
+
+                                                    </option>
+
+                                                <?php endforeach; ?>
+
+
+                                            </select>
+
+
+                                            <button
+                                                type="submit"
+                                                class="update-button"
+                                            >
+                                                Update
+                                            </button>
+
+
+                                        </div>
 
 
                                     </form>
-
-
-                                </div>
-
-
-                                <!-- CUSTOMER / SHIPPING -->
-
-                                <div>
-
-
-                                    <h3 class="section-title">
-                                        Customer & Shipping
-                                    </h3>
-
-
-                                    <div class="info-box">
-
-
-                                        <div class="info-label">
-                                            Customer
-                                        </div>
-
-
-                                        <div class="info-value">
-
-                                            <?= e(
-                                                $order["customer_name"]
-                                            ) ?>
-
-
-                                            <br>
-
-
-                                            <a
-                                                href="mailto:<?= e(
-                                                    $order["customer_email"]
-                                                ) ?>"
-                                            >
-
-                                                <?= e(
-                                                    $order["customer_email"]
-                                                ) ?>
-
-                                            </a>
-
-
-                                        </div>
-
-
-                                    </div>
-
-
-                                    <?php if (
-                                        !empty(
-                                            $order["shipping_name"]
-                                        )
-                                    ): ?>
-
-
-                                        <div class="info-box">
-
-
-                                            <div class="info-label">
-                                                Shipping Name
-                                            </div>
-
-
-                                            <div class="info-value">
-
-                                                <?= e(
-                                                    $order["shipping_name"]
-                                                ) ?>
-
-                                            </div>
-
-
-                                        </div>
-
-
-                                    <?php endif; ?>
-
-
-                                    <?php if (
-                                        !empty(
-                                            $order["shipping_phone"]
-                                        )
-                                    ): ?>
-
-
-                                        <div class="info-box">
-
-
-                                            <div class="info-label">
-                                                Phone
-                                            </div>
-
-
-                                            <div class="info-value">
-
-                                                <?= e(
-                                                    $order["shipping_phone"]
-                                                ) ?>
-
-                                            </div>
-
-
-                                        </div>
-
-
-                                    <?php endif; ?>
-
-
-                                    <?php if (
-                                        !empty(
-                                            $order["shipping_address"]
-                                        )
-                                    ): ?>
-
-
-                                        <div class="info-box">
-
-
-                                            <div class="info-label">
-                                                Shipping Address
-                                            </div>
-
-
-                                            <div class="info-value">
-
-                                                <?= e(
-                                                    $order["shipping_address"]
-                                                ) ?>
-
-                                            </div>
-
-
-                                        </div>
-
-
-                                    <?php endif; ?>
-
-
-                                    <?php if (
-                                        !empty(
-                                            $order["notes"]
-                                        )
-                                    ): ?>
-
-
-                                        <div class="info-box">
-
-
-                                            <div class="info-label">
-                                                Customer Notes
-                                            </div>
-
-
-                                            <div class="info-value">
-
-                                                <?= e(
-                                                    $order["notes"]
-                                                ) ?>
-
-                                            </div>
-
-
-                                        </div>
-
-
-                                    <?php endif; ?>
 
 
                                 </div>
@@ -2112,28 +2585,10 @@ $admin_name =
                 <?php endforeach; ?>
 
 
-            </div>
+            <?php endif; ?>
 
 
-        <?php else: ?>
-
-
-            <div class="empty-state">
-
-
-                <strong>
-                    No Orders Yet
-                </strong>
-
-
-                Customer purchases will appear here
-                after an order is successfully placed.
-
-
-            </div>
-
-
-        <?php endif; ?>
+        </div>
 
 
     </main>

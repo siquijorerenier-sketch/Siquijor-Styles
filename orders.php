@@ -6,7 +6,6 @@ require_once __DIR__ . "/php/database.php";
 
 header("Content-Type: text/html; charset=UTF-8");
 
-
 /* =========================================================
    LOGIN CHECK
 ========================================================= */
@@ -20,7 +19,6 @@ if (
 }
 
 $user_id = (int) $_SESSION["user_id"];
-
 
 /* =========================================================
    GET USER INFORMATION
@@ -45,15 +43,11 @@ $user = $user_result->fetch_assoc();
 
 $user_stmt->close();
 
-
 if (!$user) {
-
     session_destroy();
-
     header("Location: login.php");
     exit;
 }
-
 
 /* =========================================================
    GET ORDERS
@@ -62,10 +56,10 @@ if (!$user) {
 $order_stmt = $conn->prepare(
     "SELECT
         id,
-        full_name,
-        email,
-        phone,
-        address,
+        shipping_name,
+        shipping_email,
+        shipping_phone,
+        shipping_address,
         total_amount,
         status
      FROM orders
@@ -81,7 +75,6 @@ $order_stmt->bind_param("i", $user_id);
 $order_stmt->execute();
 
 $orders_result = $order_stmt->get_result();
-
 
 /* =========================================================
    ESCAPE HELPER
@@ -140,7 +133,7 @@ function e($value)
     >
 
 
-    <!-- CORRECT CSS PATH -->
+    <!-- CSS -->
 
     <link
         rel="stylesheet"
@@ -358,6 +351,7 @@ function e($value)
             .order-total strong {
                 font-size: 19px;
             }
+
         }
 
     </style>
@@ -489,7 +483,9 @@ function e($value)
             <div class="orders-empty">
 
                 <div class="orders-empty-icon">
+
                     <i class="fa-solid fa-receipt"></i>
+
                 </div>
 
                 <h2>
@@ -541,6 +537,7 @@ function e($value)
                         </div>
 
 
+
                         <!-- CUSTOMER DETAILS -->
 
                         <div class="order-details">
@@ -552,7 +549,7 @@ function e($value)
                                     Customer:
                                 </strong>
 
-                                <?= e($order["full_name"]) ?>
+                                <?= e($order["shipping_name"]) ?>
 
                             </div>
 
@@ -563,7 +560,7 @@ function e($value)
                                     Email:
                                 </strong>
 
-                                <?= e($order["email"]) ?>
+                                <?= e($order["shipping_email"]) ?>
 
                             </div>
 
@@ -574,7 +571,7 @@ function e($value)
                                     Phone:
                                 </strong>
 
-                                <?= e($order["phone"]) ?>
+                                <?= e($order["shipping_phone"]) ?>
 
                             </div>
 
@@ -586,7 +583,7 @@ function e($value)
                                 </strong>
 
                                 <?= nl2br(
-                                    e($order["address"])
+                                    e($order["shipping_address"])
                                 ) ?>
 
                             </div>
@@ -595,48 +592,60 @@ function e($value)
                         </div>
 
 
+
                         <!-- ITEMS TITLE -->
 
                         <div class="order-items-title">
+
                             Items
+
                         </div>
+
 
 
                         <?php
 
                         /*
-                         * IMPORTANT:
-                         * products.id is the primary key.
-                         * cart/order_items use product_id.
+                         * Use product_name stored in order_items.
+                         *
+                         * This is safer for order history because
+                         * the product may be deleted later.
                          */
 
                         $item_stmt = $conn->prepare(
                             "SELECT
-                                oi.quantity,
-                                oi.price,
-                                p.product_name
-                             FROM order_items oi
-                             INNER JOIN products p
-                                ON p.id = oi.product_id
-                             WHERE oi.order_id = ?
-                             ORDER BY oi.id ASC"
+                                product_name,
+                                quantity,
+                                price
+                             FROM order_items
+                             WHERE order_id = ?
+                             ORDER BY id ASC"
                         );
 
+                        if (!$item_stmt) {
+                            echo '
+                                <div class="order-items">
+                                    <div class="order-item">
+                                        <span>
+                                            Unable to load order items.
+                                        </span>
+                                    </div>
+                                </div>
+                            ';
 
-                        $order_id =
-                            (int) $order["id"];
+                            continue;
+                        }
 
+                        $order_id = (int) $order["id"];
 
                         $item_stmt->bind_param(
                             "i",
                             $order_id
                         );
 
-
                         $item_stmt->execute();
 
-                        $items =
-                            $item_stmt->get_result();
+                        $items = $item_stmt->get_result();
 
                         ?>
 
@@ -648,18 +657,20 @@ function e($value)
 
 
                                 <?php while (
-                                    $item =
-                                    $items->fetch_assoc()
+                                    $item = $items->fetch_assoc()
                                 ): ?>
 
 
                                     <div class="order-item">
 
                                         <strong>
+
                                             <?= e(
                                                 $item["product_name"]
                                             ) ?>
+
                                         </strong>
+
 
                                         <span>
 
@@ -717,11 +728,13 @@ function e($value)
                             </span>
 
                             <strong>
+
                                 ₱<?= number_format(
                                     (float)
                                     $order["total_amount"],
                                     2
                                 ) ?>
+
                             </strong>
 
                         </div>
@@ -754,6 +767,7 @@ function e($value)
 
 <footer class="footer">
 
+
     <div class="footer-brand">
 
         <div class="footer-logo-slot">
@@ -770,12 +784,16 @@ function e($value)
 
         </div>
 
+
         <p>
+
             Island-inspired fashion and accessories
             rooted in the beauty of Siquijor.
+
         </p>
 
     </div>
+
 
 
     <div class="footer-column">
@@ -795,6 +813,7 @@ function e($value)
     </div>
 
 
+
     <div class="footer-column">
 
         <h4>
@@ -810,6 +829,7 @@ function e($value)
         </a>
 
     </div>
+
 
 
     <div class="footer-column">
@@ -829,6 +849,7 @@ function e($value)
     </div>
 
 
+
     <div class="footer-column">
 
         <h4>
@@ -845,15 +866,19 @@ function e($value)
 
     </div>
 
+
 </footer>
+
 
 
 <div class="copyright">
 
     © <?= date("Y") ?> Siquijor Styles.
+
     All rights reserved.
 
 </div>
+
 
 
 <?php
@@ -863,4 +888,5 @@ $order_stmt->close();
 ?>
 
 </body>
+
 </html>
