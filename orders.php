@@ -1,6 +1,9 @@
 ```php
 <?php
 
+/* Use Philippine time consistently for order timestamps and countdowns. */
+date_default_timezone_set("Asia/Manila");
+
 session_start();
 
 require_once __DIR__ . "/php/database.php";
@@ -131,7 +134,7 @@ if (
 
         $elapsed = $now - $created_at;
 
-        $five_days =
+        $cancel_days =
             5 * 24 * 60 * 60;
 
         $seven_days =
@@ -151,7 +154,7 @@ if (
             );
         }
 
-        if ($elapsed >= $five_days) {
+        if ($elapsed >= $cancel_days) {
 
             throw new Exception(
                 "Cancellation is locked during days 6 and 7."
@@ -1234,8 +1237,7 @@ $server_now = time();
 
         .cancel-order-form {
 
-            margin-top:
-                14px;
+            margin: 0;
         }
 
         .cancel-order-button {
@@ -1313,7 +1315,7 @@ $server_now = time();
            REMOVE CANCELLED ORDER
         ===================================================== */
 
-        .remove-order-area {
+        .order-action-area {
 
             display:
                 flex;
@@ -1321,14 +1323,22 @@ $server_now = time();
             justify-content:
                 flex-end;
 
+            align-items:
+                center;
+
             margin-top:
-                18px;
+                20px;
 
             padding-top:
                 18px;
 
             border-top:
                 1px solid #ece5dc;
+        }
+
+        .order-action-area form {
+
+            margin: 0;
         }
 
         .remove-order-button {
@@ -1506,7 +1516,7 @@ $server_now = time();
                     19px;
             }
 
-            .remove-order-area {
+            .order-action-area {
 
                 justify-content:
                     stretch;
@@ -1688,7 +1698,7 @@ $server_now = time();
                         $server_now -
                         $created_timestamp;
 
-                    $five_days =
+                    $cancel_days =
                         5 * 24 * 60 * 60;
 
                     $seven_days =
@@ -1697,16 +1707,21 @@ $server_now = time();
                     $can_cancel =
                         $order["status"] === "Pending" &&
                         $elapsed >= 0 &&
-                        $elapsed < $five_days;
+                        $elapsed < $cancel_days;
 
                     $cancellation_locked =
                         $order["status"] === "Pending" &&
-                        $elapsed >= $five_days;
+                        $elapsed >= $cancel_days;
+
+                    $countdown_limit =
+                        $elapsed < $cancel_days
+                            ? $cancel_days
+                            : $seven_days;
 
                     $seconds_remaining =
                         max(
                             0,
-                            $seven_days -
+                            $countdown_limit -
                             max(0, $elapsed)
                         );
 
@@ -1907,19 +1922,19 @@ $server_now = time();
                                                 $cancellation_locked
                                             ): ?>
 
-                                                Your order is now in
-                                                the final processing
-                                                period. Cancellation
-                                                is no longer available
+                                                Your order has passed the
+                                                5-day cancellation window.
+                                                Cancellation is locked
                                                 during days 6–7.
 
                                             <?php else: ?>
 
                                                 You may cancel this
-                                                pending order during
-                                                the first 5 days.
-                                                Cancellation becomes
-                                                locked during days 6–7.
+                                                pending order from the
+                                                moment it is placed until
+                                                the end of day 5.
+                                                Cancellation is locked
+                                                starting on day 6.
 
                                             <?php endif; ?>
 
@@ -1984,140 +1999,9 @@ $server_now = time();
 
                                         </div>
 
-                                        <!-- =================================================
-                                             CANCEL BUTTON
-                                        ================================================= -->
-
-                                        <?php if (
-                                            $can_cancel
-                                        ): ?>
-
-                                            <form
-                                                method="POST"
-                                                class="cancel-order-form"
-                                                onsubmit="
-                                                    return confirm(
-                                                        'Are you sure you want to cancel this order?'
-                                                    );
-                                                "
-                                            >
-
-                                                <input
-                                                    type="hidden"
-                                                    name="order_id"
-                                                    value="<?= (int)
-                                                        $order["id"] ?>"
-                                                >
-
-                                                <input
-                                                    type="hidden"
-                                                    name="cancel_order"
-                                                    value="1"
-                                                >
-
-                                                <button
-                                                    type="submit"
-                                                    class="cancel-order-button"
-                                                    data-cancel-button
-                                                >
-
-                                                    <i
-                                                        class="
-                                                            fa-solid
-                                                            fa-ban
-                                                        "
-                                                    ></i>
-
-                                                    Cancel Order
-
-                                                </button>
-
-                                            </form>
-
-                                        <?php else: ?>
-
-                                            <button
-                                                type="button"
-                                                class="
-                                                    cancel-order-button
-                                                    locked
-                                                "
-                                                disabled
-                                                data-cancel-button
-                                            >
-
-                                                <i
-                                                    class="
-                                                        fa-solid
-                                                        fa-lock
-                                                    "
-                                                ></i>
-
-                                                Cancellation Locked
-
-                                            </button>
-
-                                        <?php endif; ?>
-
                                     </div>
 
                                 </div>
-
-                            </div>
-
-                        <?php endif; ?>
-
-                        <!-- =================================================
-                             CANCELLED ORDER REMOVE BUTTON
-                        ================================================= -->
-
-                        <?php if (
-                            $order["status"] === "Cancelled"
-                        ): ?>
-
-                            <div
-                                class="remove-order-area"
-                            >
-
-                                <form
-                                    method="POST"
-                                    onsubmit="
-                                        return confirm(
-                                            'Are you sure you want to permanently remove this cancelled order from your order history? This cannot be undone.'
-                                        );
-                                    "
-                                >
-
-                                    <input
-                                        type="hidden"
-                                        name="order_id"
-                                        value="<?= (int)
-                                            $order["id"] ?>"
-                                    >
-
-                                    <input
-                                        type="hidden"
-                                        name="remove_order"
-                                        value="1"
-                                    >
-
-                                    <button
-                                        type="submit"
-                                        class="remove-order-button"
-                                    >
-
-                                        <i
-                                            class="
-                                                fa-solid
-                                                fa-trash
-                                            "
-                                        ></i>
-
-                                        Remove Order
-
-                                    </button>
-
-                                </form>
 
                             </div>
 
@@ -2272,6 +2156,111 @@ $server_now = time();
 
                         </div>
 
+                        <!-- =================================================
+                             ORDER ACTIONS
+                             All order actions stay in one consistent location.
+                        ================================================= -->
+
+                        <?php if ($order["status"] === "Pending"): ?>
+
+                            <div class="order-action-area">
+
+                                <?php if ($can_cancel): ?>
+
+                                    <form
+                                        method="POST"
+                                        class="cancel-order-form"
+                                        onsubmit="
+                                            return confirm(
+                                                'Are you sure you want to cancel this order?'
+                                            );
+                                        "
+                                    >
+
+                                        <input
+                                            type="hidden"
+                                            name="order_id"
+                                            value="<?= (int) $order["id"] ?>"
+                                        >
+
+                                        <input
+                                            type="hidden"
+                                            name="cancel_order"
+                                            value="1"
+                                        >
+
+                                        <button
+                                            type="submit"
+                                            class="cancel-order-button"
+                                            data-cancel-button
+                                        >
+
+                                            <i class="fa-solid fa-ban"></i>
+                                            Cancel Order
+
+                                        </button>
+
+                                    </form>
+
+                                <?php else: ?>
+
+                                    <button
+                                        type="button"
+                                        class="cancel-order-button locked"
+                                        disabled
+                                        data-cancel-button
+                                    >
+
+                                        <i class="fa-solid fa-lock"></i>
+                                        Cancellation Locked
+
+                                    </button>
+
+                                <?php endif; ?>
+
+                            </div>
+
+                        <?php elseif ($order["status"] === "Cancelled"): ?>
+
+                            <div class="order-action-area">
+
+                                <form
+                                    method="POST"
+                                    onsubmit="
+                                        return confirm(
+                                            'Are you sure you want to permanently remove this cancelled order from your order history? This cannot be undone.'
+                                        );
+                                    "
+                                >
+
+                                    <input
+                                        type="hidden"
+                                        name="order_id"
+                                        value="<?= (int) $order["id"] ?>"
+                                    >
+
+                                    <input
+                                        type="hidden"
+                                        name="remove_order"
+                                        value="1"
+                                    >
+
+                                    <button
+                                        type="submit"
+                                        class="remove-order-button"
+                                    >
+
+                                        <i class="fa-solid fa-trash"></i>
+                                        Remove Order
+
+                                    </button>
+
+                                </form>
+
+                            </div>
+
+                        <?php endif; ?>
+
                     </article>
 
                 <?php endwhile; ?>
@@ -2295,7 +2284,7 @@ $server_now = time();
 const SEVEN_DAYS =
     7 * 24 * 60 * 60;
 
-const FIVE_DAYS =
+const CANCEL_DAYS =
     5 * 24 * 60 * 60;
 
 
@@ -2381,10 +2370,19 @@ function updateOrderCountdowns() {
             const elapsed =
                 now - created;
 
+            /*
+             * Days 1-5: count down to the exact 5-day cancellation cutoff.
+             * Days 6-7: count down to the exact 7-day processing cutoff.
+             */
+            const countdownLimit =
+                elapsed < CANCEL_DAYS
+                    ? CANCEL_DAYS
+                    : SEVEN_DAYS;
+
             const remaining =
                 Math.max(
                     0,
-                    SEVEN_DAYS -
+                    countdownLimit -
                     Math.max(
                         0,
                         elapsed
@@ -2427,12 +2425,12 @@ function updateOrderCountdowns() {
             }
 
             /* =================================================
-               FIRST 5 DAYS
+               DAYS 1–5
             ================================================= */
 
             if (
                 elapsed >= 0 &&
-                elapsed < FIVE_DAYS
+                elapsed < CANCEL_DAYS
             ) {
 
                 warning.classList.remove(
@@ -2448,7 +2446,7 @@ function updateOrderCountdowns() {
                 if (text) {
 
                     text.textContent =
-                        "You may cancel this pending order during the first 5 days. Cancellation becomes locked during days 6–7.";
+                        "You may cancel this pending order from the moment it is placed until the end of day 5. Cancellation is locked starting on day 6.";
                 }
 
                 if (countdown) {
@@ -2473,7 +2471,7 @@ function updateOrderCountdowns() {
             ================================================= */
 
             if (
-                elapsed >= FIVE_DAYS &&
+                elapsed >= CANCEL_DAYS &&
                 elapsed < SEVEN_DAYS
             ) {
 
@@ -2490,7 +2488,7 @@ function updateOrderCountdowns() {
                 if (text) {
 
                     text.textContent =
-                        "Your order is now in the final processing period. Cancellation is no longer available during days 6–7.";
+                        "Your order has passed the 5-day cancellation window. Cancellation is locked during days 6–7.";
                 }
 
                 if (countdown) {

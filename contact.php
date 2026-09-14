@@ -385,166 +385,32 @@ if ($logged_in) {
 
 <header class="header">
 
-
     <div class="logo-area">
-
         <a href="index.php">
-
             SIQUIJOR STYLES
-
         </a>
-
     </div>
 
-
     <nav class="navigation">
-
-        <a href="index.php">
-            Home
-        </a>
-
-        <a href="shop.php">
-            Shop
-        </a>
-
-        <a href="index.php#collections">
-            Collections
-            <span>⌄</span>
-        </a>
-
-        <a href="about.php">
-            About
-        </a>
-
-        <a
-            href="contact.php"
-            class="active">
-
-            Contact
-
-        </a>
-
+        <a href="index.php">Home</a>
+        <a href="shop.php">Shop</a>
+        <a href="index.php#collections">Collections <span>⌄</span></a>
+        <a href="about.php">About</a>
+        <a href="contact.php" class="active">Contact</a>
+        <a href="cart.php">Cart</a>
+        <?php if ($logged_in): ?>
+            <a href="orders.php">My Orders</a>
+        <?php endif; ?>
     </nav>
 
-
     <div class="header-tools">
-
-
-        <!-- SEARCH -->
-
-        <button
-            class="header-icon"
-            type="button"
-            onclick="openSearch()"
-            title="Search">
-
-            ⌕
-
-        </button>
-
-
-        <!-- PROFILE -->
-
         <?php if ($logged_in && $current_user): ?>
-
-<!-- PROFILE -->
-
-<a
-    class="header-icon profile-button"
-    href="<?= $logged_in ? 'orders.php' : 'login.php' ?>"
-    <?= !$logged_in ? 'onclick="saveReturnPage()"' : '' ?>
-    title="My Profile"
-    aria-label="My Profile">
-
-    <i class="fa-regular fa-user"></i>
-
-</a>
-
-    <i class="fa-regular fa-user"></i>
-
-</a>
-
+            <a class="login-button" href="orders.php"><?= htmlspecialchars($current_user["full_name"], ENT_QUOTES, "UTF-8") ?></a>
+            <a class="signup-button" href="logout.php">Log Out</a>
         <?php else: ?>
-
-            <a
-                class="header-icon"
-                href="login.php"
-                onclick="saveReturnPage()"
-                title="Profile">
-
-                ♙
-
-            </a>
-
+            <a class="login-button" href="login.php" onclick="saveReturnPage()">Log In</a>
+            <a class="signup-button" href="signup.php" onclick="saveReturnPage()">Sign Up</a>
         <?php endif; ?>
-
-
-        <!-- CART -->
-
-<a
-    class="header-icon cart-button"
-    href="cart.php"
-    title="Cart"
-    aria-label="Shopping Cart">
-
-    <i class="fa-solid fa-cart-shopping"></i>
-
-    <span id="cartCount">
-        <?= $cart_count ?>
-    </span>
-
-</a>>
-
-
-        <!-- LOGIN / LOGOUT -->
-
-        <?php if ($logged_in && $current_user): ?>
-
-            <a
-                class="login-button"
-                href="orders.php">
-
-                <?= htmlspecialchars(
-                    $current_user["full_name"],
-                    ENT_QUOTES,
-                    "UTF-8"
-                ) ?>
-
-            </a>
-
-
-            <a
-                class="signup-button"
-                href="logout.php">
-
-                Log Out
-
-            </a>
-
-        <?php else: ?>
-
-            <a
-                class="login-button"
-                href="login.php"
-                onclick="saveReturnPage()">
-
-                Log In
-
-            </a>
-
-
-            <a
-                class="signup-button"
-                href="signup.php"
-                onclick="saveReturnPage()">
-
-                Sign Up
-
-            </a>
-
-        <?php endif; ?>
-
-
     </div>
 
 </header>

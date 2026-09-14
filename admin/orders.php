@@ -1927,7 +1927,7 @@ $admin_name =
         <nav class="admin-nav">
 
 
-            <a href="dashboard.php">
+            <a href="index.php">
 
                 <span class="nav-icon">
                     🏠
