@@ -418,15 +418,51 @@ function e($value)
         <?php endif; ?>
     </nav>
 
-    <div class="header-tools">
-        <?php if ($logged_in && $current_user): ?>
-            <a class="login-button" href="orders.php"><?= e($current_user["full_name"]) ?></a>
-            <a class="signup-button" href="logout.php">Log Out</a>
+<div class="header-tools">
+
+    <?php if ($logged_in && $current_user): ?>
+
+        <?php if ($_SESSION["role"] === "admin"): ?>
+
+            <a
+                class="login-button"
+                href="http://localhost/Website/admin/index.php">
+                Admin Dashboard
+            </a>
+
         <?php else: ?>
-            <a class="login-button" href="login.php">Log In</a>
-            <a class="signup-button" href="signup.php">Sign Up</a>
+
+            <a
+                class="login-button"
+                href="orders.php">
+                <?= e($current_user["full_name"]) ?>
+            </a>
+
         <?php endif; ?>
-    </div>
+
+        <a
+            class="signup-button"
+            href="logout.php">
+            Log Out
+        </a>
+
+    <?php else: ?>
+
+        <a
+            class="login-button"
+            href="login.php">
+            Log In
+        </a>
+
+        <a
+            class="signup-button"
+            href="signup.php">
+            Sign Up
+        </a>
+
+    <?php endif; ?>
+
+</div>
 
 </header>
 

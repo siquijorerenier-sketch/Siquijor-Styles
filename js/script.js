@@ -233,6 +233,7 @@ function escapeHTML(value) {
 function openLogin() {
 
     closeModal("signupModal");
+
     closeModal("profileModal");
 
     const loginModal =
@@ -247,14 +248,12 @@ function openLogin() {
         );
 
         return;
-
     }
 
     saveReturnPage();
 
     window.location.href =
         "login.php";
-
 }
 
 
@@ -286,7 +285,6 @@ async function login(event) {
             "login.php";
 
         return;
-
     }
 
 
@@ -308,7 +306,6 @@ async function login(event) {
         );
 
         return;
-
     }
 
 
@@ -362,14 +359,11 @@ async function login(event) {
                 responseText
             );
 
-
             alert(
                 "The server returned an unexpected response. Please check PHP."
             );
 
-
             return;
-
         }
 
 
@@ -405,14 +399,11 @@ async function login(event) {
 
                     window.location.href =
                         "signup.php";
-
                 }
-
             }
 
 
             return;
-
         }
 
 
@@ -426,6 +417,34 @@ async function login(event) {
             "loginModal"
         );
 
+
+        /* =====================================================
+           ADMIN REDIRECT
+
+           Admin users ALWAYS go directly to:
+
+           http://localhost/Website/admin/index.php
+        ===================================================== */
+
+        if (
+            data.user &&
+            String(
+                data.user.role
+            ).toLowerCase() === "admin"
+        ) {
+
+            clearReturnPage();
+
+            window.location.href =
+                "http://localhost/Website/admin/index.php";
+
+            return;
+        }
+
+
+        /* =====================================================
+           NORMAL CUSTOMER LOGIN
+        ===================================================== */
 
         const returnPage =
             getReturnPage();
@@ -449,914 +468,7 @@ async function login(event) {
         alert(
             "Unable to connect to the server."
         );
-
     }
-
-}
-
-
-/* =========================================================
-   SIGN UP
-========================================================= */
-
-function openSignup() {
-
-    closeModal("loginModal");
-    closeModal("profileModal");
-
-
-    const signupModal =
-        document.getElementById(
-            "signupModal"
-        );
-
-
-    if (signupModal) {
-
-        openModal(
-            "signupModal"
-        );
-
-        return;
-
-    }
-
-
-    saveReturnPage();
-
-
-    window.location.href =
-        "signup.php";
-
-}
-
-
-async function signup(event) {
-
-    event.preventDefault();
-
-
-    const nameElement =
-        document.getElementById(
-            "signupName"
-        );
-
-
-    const emailElement =
-        document.getElementById(
-            "signupEmail"
-        );
-
-
-    const passwordElement =
-        document.getElementById(
-            "signupPassword"
-        );
-
-
-    const confirmElement =
-        document.getElementById(
-            "signupConfirm"
-        );
-
-
-    if (
-        !nameElement ||
-        !emailElement ||
-        !passwordElement ||
-        !confirmElement
-    ) {
-
-        saveReturnPage();
-
-        window.location.href =
-            "signup.php";
-
-        return;
-
-    }
-
-
-    const fullName =
-        nameElement.value.trim();
-
-
-    const email =
-        emailElement.value.trim();
-
-
-    const password =
-        passwordElement.value;
-
-
-    const confirmPassword =
-        confirmElement.value;
-
-
-    if (
-        !fullName ||
-        !email ||
-        !password ||
-        !confirmPassword
-    ) {
-
-        alert(
-            "Please complete all fields."
-        );
-
-        return;
-
-    }
-
-
-    if (
-        password !==
-        confirmPassword
-    ) {
-
-        alert(
-            "Passwords do not match."
-        );
-
-        return;
-
-    }
-
-
-    if (
-        password.length < 6
-    ) {
-
-        alert(
-            "Password must be at least 6 characters."
-        );
-
-        return;
-
-    }
-
-
-    try {
-
-        const formData =
-            new FormData();
-
-
-        formData.append(
-            "full_name",
-            fullName
-        );
-
-
-        formData.append(
-            "email",
-            email
-        );
-
-
-        formData.append(
-            "password",
-            password
-        );
-
-
-        formData.append(
-            "confirm_password",
-            confirmPassword
-        );
-
-
-        const response =
-            await fetch(
-                "php/signup_process.php",
-                {
-                    method: "POST",
-                    body: formData,
-                    credentials: "same-origin"
-                }
-            );
-
-
-        const responseText =
-            await response.text();
-
-
-        let data;
-
-
-        try {
-
-            data =
-                JSON.parse(
-                    responseText
-                );
-
-        } catch (jsonError) {
-
-            console.error(
-                "Signup server response:",
-                responseText
-            );
-
-
-            alert(
-                "The server returned an unexpected response. Please check PHP."
-            );
-
-
-            return;
-
-        }
-
-
-        if (!data.success) {
-
-            alert(
-                data.message ||
-                "Unable to create account."
-            );
-
-            return;
-
-        }
-
-
-        alert(
-            data.message ||
-            "Account created successfully."
-        );
-
-
-        closeModal(
-            "signupModal"
-        );
-
-
-        const returnPage =
-            getReturnPage();
-
-
-        clearReturnPage();
-
-
-        window.location.href =
-            returnPage;
-
-
-    } catch (error) {
-
-        console.error(
-            "Signup error:",
-            error
-        );
-
-
-        alert(
-            "Unable to connect to the server."
-        );
-
-    }
-
-}
-
-
-/* =========================================================
-   SWITCH LOGIN / SIGNUP
-========================================================= */
-
-function switchToSignup() {
-
-    closeModal("loginModal");
-
-    openSignup();
-
-}
-
-
-function switchToLogin() {
-
-    closeModal("signupModal");
-
-    openLogin();
-
-}
-
-
-/* =========================================================
-   PROFILE
-========================================================= */
-
-function openProfile() {
-
-    openModal(
-        "profileModal"
-    );
-
-}
-
-
-/* =========================================================
-   LOGOUT
-========================================================= */
-
-async function logout() {
-
-    const confirmed =
-        confirm(
-            "Are you sure you want to log out?"
-        );
-
-
-    if (!confirmed) {
-        return;
-    }
-
-
-    try {
-
-        await fetch(
-            "logout.php",
-            {
-                method: "GET",
-                credentials: "same-origin"
-            }
-        );
-
-    } catch (error) {
-
-        console.error(
-            "Logout error:",
-            error
-        );
-
-    }
-
-
-    cart = [];
-
-    clearReturnPage();
-
-
-    window.location.href =
-        "index.php";
-
-}
-
-
-/* =========================================================
-   LOAD CART FROM DATABASE
-========================================================= */
-
-async function loadCart() {
-
-    try {
-
-        const formData =
-            new FormData();
-
-
-        formData.append(
-            "action",
-            "get"
-        );
-
-
-        const response =
-            await fetch(
-                "php/cart_process.php",
-                {
-                    method: "POST",
-                    body: formData,
-                    credentials: "same-origin"
-                }
-            );
-
-
-        const responseText =
-            await response.text();
-
-
-        let data;
-
-
-        try {
-
-            data =
-                JSON.parse(
-                    responseText
-                );
-
-        } catch (jsonError) {
-
-            console.error(
-                "Cart server response:",
-                responseText
-            );
-
-
-            cart = [];
-
-            updateCartCount();
-
-            updateShopStockDisplays();
-
-
-            return {
-                success: false,
-                server_error: true
-            };
-
-        }
-
-
-        let serverCart = [];
-
-
-        if (
-            data.data &&
-            Array.isArray(
-                data.data.cart
-            )
-        ) {
-
-            serverCart =
-                data.data.cart;
-
-        }
-
-        else if (
-            data.data &&
-            Array.isArray(
-                data.data.items
-            )
-        ) {
-
-            serverCart =
-                data.data.items;
-
-        }
-
-        else if (
-            Array.isArray(
-                data.cart
-            )
-        ) {
-
-            serverCart =
-                data.cart;
-
-        }
-
-        else if (
-            Array.isArray(
-                data.items
-            )
-        ) {
-
-            serverCart =
-                data.items;
-
-        }
-
-
-        cart =
-            serverCart.map(
-                function (item) {
-
-                    const productId =
-                        Number(
-                            item.product_id ??
-                            item.productId ??
-                            item.id ??
-                            0
-                        );
-
-
-                    const productName =
-                        item.product_name ??
-                        item.productName ??
-                        item.name ??
-                        "Product";
-
-
-                    const price =
-                        Number(
-                            item.price ?? 0
-                        );
-
-
-                    const quantity =
-                        Number(
-                            item.quantity ?? 0
-                        );
-
-
-                    const stock =
-                        item.stock !== undefined &&
-                        item.stock !== null
-                            ? Number(item.stock)
-                            : null;
-
-
-                    const image =
-                        item.image ??
-                        "";
-
-
-                    return {
-
-                        id:
-                            productId,
-
-                        productId:
-                            productId,
-
-                        product_id:
-                            productId,
-
-                        name:
-                            productName,
-
-                        product_name:
-                            productName,
-
-                        price:
-                            price,
-
-                        quantity:
-                            quantity,
-
-                        stock:
-                            stock,
-
-                        image:
-                            image
-
-                    };
-
-                }
-            );
-
-
-        updateCartCount();
-
-
-        /*
-         * IMPORTANT:
-         * Every time the cart is loaded,
-         * refresh the remaining stock shown
-         * on the shop page.
-         */
-
-        updateShopStockDisplays();
-
-
-        return data;
-
-
-    } catch (error) {
-
-        console.error(
-            "Cart loading error:",
-            error
-        );
-
-
-        cart = [];
-
-        updateCartCount();
-
-        updateShopStockDisplays();
-
-
-        return {
-            success: false,
-            server_error: true
-        };
-
-    }
-
-}
-
-
-/* =========================================================
-   OPEN CART
-========================================================= */
-
-async function openCart() {
-
-    await loadCart();
-
-    renderCart();
-
-    openModal(
-        "cartModal"
-    );
-
-}
-
-
-/* =========================================================
-   CART COUNT
-========================================================= */
-
-function updateCartCount() {
-
-    const cartCount =
-        document.getElementById(
-            "cartCount"
-        );
-
-
-    if (!cartCount) {
-        return;
-    }
-
-
-    let total = 0;
-
-
-    cart.forEach(
-        function (item) {
-
-            total +=
-                Number(
-                    item.quantity
-                ) || 0;
-
-        }
-    );
-
-
-    cartCount.textContent =
-        total;
-
-}
-
-
-/* =========================================================
-   UPDATE SHOP STOCK DISPLAY
-========================================================= */
-
-function updateShopStockDisplays() {
-
-    const productCards =
-        document.querySelectorAll(
-            ".product-card"
-        );
-
-
-    if (
-        !productCards ||
-        productCards.length === 0
-    ) {
-
-        return;
-
-    }
-
-
-    productCards.forEach(
-        function (card) {
-
-            const productId =
-                Number(
-                    card.dataset.productId ||
-                    0
-                );
-
-
-            if (!productId) {
-                return;
-            }
-
-
-            /*
-             * Get the original database stock.
-             *
-             * data-original-stock is preferred
-             * because the visible stock number
-             * changes after every cart update.
-             */
-
-            let originalStock =
-                Number(
-                    card.dataset.originalStock
-                );
-
-
-            /*
-             * If original stock has not been
-             * stored yet, try data-stock.
-             */
-
-            if (
-                !originalStock ||
-                originalStock < 0
-            ) {
-
-                originalStock =
-                    Number(
-                        card.dataset.stock
-                    );
-
-            }
-
-
-            /*
-             * If the HTML does not have data-stock,
-             * get the initial number from the
-             * visible stock text.
-             */
-
-            if (
-                !originalStock ||
-                originalStock < 0
-            ) {
-
-                const stockElement =
-                    card.querySelector(
-                        ".product-stock"
-                    );
-
-
-                if (stockElement) {
-
-                    const match =
-                        stockElement.textContent.match(
-                            /(\d+)/
-                        );
-
-
-                    if (match) {
-
-                        originalStock =
-                            Number(
-                                match[1]
-                            );
-
-                    }
-
-                }
-
-            }
-
-
-            if (
-                isNaN(originalStock) ||
-                originalStock < 0
-            ) {
-
-                return;
-
-            }
-
-
-            /*
-             * Store the original stock permanently
-             * for this page session.
-             */
-
-            card.dataset.originalStock =
-                originalStock;
-
-
-            /*
-             * Find quantity of this product
-             * already in the logged-in user's cart.
-             */
-
-            let cartQuantity = 0;
-
-
-            cart.forEach(
-                function (item) {
-
-                    const itemProductId =
-                        Number(
-                            item.productId ??
-                            item.product_id ??
-                            item.id ??
-                            0
-                        );
-
-
-                    if (
-                        itemProductId ===
-                        productId
-                    ) {
-
-                        cartQuantity +=
-                            Number(
-                                item.quantity
-                            ) || 0;
-
-                    }
-
-                }
-            );
-
-
-            /*
-             * Calculate remaining stock.
-             */
-
-            const remainingStock =
-                Math.max(
-                    0,
-                    originalStock -
-                    cartQuantity
-                );
-
-
-            /*
-             * Store the remaining stock
-             * on the card.
-             */
-
-            card.dataset.stock =
-                remainingStock;
-
-
-            /*
-             * Update visible stock text.
-             */
-
-            const stockElement =
-                card.querySelector(
-                    ".product-stock"
-                );
-
-
-            if (stockElement) {
-
-                if (
-                    remainingStock <= 0
-                ) {
-
-                    stockElement.textContent =
-                        "Out of Stock";
-
-                    stockElement.classList.add(
-                        "out-of-stock"
-                    );
-
-                }
-
-                else {
-
-                    stockElement.textContent =
-                        "Stock: " +
-                        remainingStock;
-
-                    stockElement.classList.remove(
-                        "out-of-stock"
-                    );
-
-                }
-
-            }
-
-
-            /*
-             * Update Add to Cart button.
-             */
-
-            const addButton =
-                card.querySelector(
-                    ".add-cart"
-                );
-
-
-            if (addButton) {
-
-                if (
-                    remainingStock <= 0
-                ) {
-
-                    addButton.disabled =
-                        true;
-
-                    addButton.textContent =
-                        "OUT OF STOCK";
-
-                }
-
-                else {
-
-                    addButton.disabled =
-                        false;
-
-                    addButton.textContent =
-                        "🛒 Add to Cart";
-
-                }
-
-            }
-
-        }
-    );
-
 }
 
 

@@ -995,100 +995,63 @@ foreach ($products as $product) {
          SIDEBAR
     ====================================================== -->
 
-    <aside class="sidebar">
+   <aside class="sidebar">
 
-        <div class="sidebar-logo">
+    <div class="sidebar-logo">
+        <img src="../images/logo.png" alt="Siquijor Styles">
+    </div>
 
-            <img
-                src="../images/logo.png"
-                alt="Siquijor Styles"
-            >
+    <div class="admin-badge">
+        <strong><?= e($admin_name) ?></strong>
+        <span>Administrator</span>
+    </div>
 
-        </div>
+    <div class="nav-title">
+        Management
+    </div>
 
+    <nav class="admin-nav">
 
-        <div class="admin-badge">
+        <a href="http://localhost/Website/admin/index.php">
+            <span class="nav-icon">⌂</span>
+            Dashboard
+        </a>
 
-            <strong>
-                <?= e($_SESSION["full_name"] ?? "Administrator") ?>
-            </strong>
+        <a href="http://localhost/Website/admin/products.php">
+            <span class="nav-icon">▣</span>
+            Products
+        </a>
 
-            <span>
-                Administrator
-            </span>
+        <a href="http://localhost/Website/admin/users.php">
+            <span class="nav-icon">♙</span>
+            Customers
+        </a>
 
-        </div>
+        <a href="http://localhost/Website/admin/orders.php">
+            <span class="nav-icon">▤</span>
+            Orders
+        </a>
 
+    </nav>
 
-        <div class="nav-title">
-            Management
-        </div>
+    <div class="sidebar-bottom">
 
+        <a
+            href="http://localhost/Website/index.php"
+            class="logout-link">
+            View Website
+        </a>
 
-        <nav class="admin-nav">
+        <a
+            href="http://localhost/Website/admin/logout.php"
+            class="logout-link"
+            style="margin-top: 8px;">
+            Log Out
+        </a>
 
-            <a href="index.php">
+    </div>
 
-                <span class="nav-icon">⌂</span>
-
-                Dashboard
-
-            </a>
-
-
-            <a
-                href="products.php"
-                class="active"
-            >
-
-                <span class="nav-icon">▣</span>
-
-                Products
-
-            </a>
-
-
-            <a href="users.php">
-
-                <span class="nav-icon">♙</span>
-
-                Customers
-
-            </a>
-
-
-            <a href="orders.php">
-
-                <span class="nav-icon">▤</span>
-
-                Orders
-
-            </a>
-
-        </nav>
-
-
-        <div class="sidebar-bottom">
-
-            <a
-                href="../index.php"
-                class="bottom-link"
-            >
-                View Website
-            </a>
-
-
-            <a
-                href="logout.php"
-                class="bottom-link"
-            >
-                Log Out
-            </a>
-
-        </div>
-
-    </aside>
-
+</aside>
 
     <!-- =====================================================
          MAIN CONTENT

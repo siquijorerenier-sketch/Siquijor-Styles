@@ -2,7 +2,7 @@
 
 require_once "database.php";
 
-session_start();
+require_once __DIR__ . "/session.php";
 
 header("Content-Type: application/json; charset=UTF-8");
 
@@ -82,7 +82,8 @@ $stmt = $conn->prepare(
         id,
         full_name,
         email,
-        password
+        password,
+        role
      FROM users
      WHERE email = ?
      LIMIT 1"
@@ -165,6 +166,9 @@ $_SESSION["full_name"] =
 $_SESSION["email"] =
     $user["email"];
 
+$_SESSION["role"] =
+    $user["role"];
+
 
 /* ==================================================
    RETURN USER
@@ -179,7 +183,10 @@ $userData = [
         $user["full_name"],
 
     "email" =>
-        $user["email"]
+        $user["email"],
+
+    "role" =>
+        $user["role"]
 
 ];
 
