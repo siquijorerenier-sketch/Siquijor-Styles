@@ -1,6 +1,6 @@
 <?php
 
-session_start();
+require_once __DIR__ . "/php/session.php";
 
 require_once "php/database.php";
 
@@ -404,6 +404,14 @@ if ($logged_in) {
     </nav>
 
     <div class="header-tools">
+
+        <?php if ($logged_in && !empty($_SESSION["role"]) && $_SESSION["role"] === "admin"): ?>
+            <a
+                class="login-button"
+                href="http://localhost/Website/admin/index.php">
+                Admin Dashboard
+            </a>
+        <?php endif; ?>
         <?php if ($logged_in && $current_user): ?>
             <a class="login-button" href="orders.php"><?= htmlspecialchars($current_user["full_name"], ENT_QUOTES, "UTF-8") ?></a>
             <a class="signup-button" href="logout.php">Log Out</a>

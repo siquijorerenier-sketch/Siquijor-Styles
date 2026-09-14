@@ -1,6 +1,6 @@
 <?php
 
-session_start();
+require_once __DIR__ . "/php/session.php";
 
 require_once "php/database.php";
 
@@ -363,161 +363,69 @@ function e($value)
 
     <nav class="navigation">
 
+        <a href="index.php">Home</a>
 
-        <!-- HOME -->
+        <a href="shop.php" class="active">Shop</a>
 
-        <a href="index.php">
+        <a href="index.php#collections">Collections <span>⌄</span></a>
 
-            Home
+        <a href="about.php">About</a>
 
-        </a>
+        <a href="contact.php">Contact</a>
 
+        <?php if ($logged_in): ?>
+            <a href="orders.php">My Orders</a>
+        <?php endif; ?>
 
-        <!-- SHOP -->
-
-        <a
-            href="shop.php"
-            class="active">
-
-            Shop
-
-        </a>
-
-
-        <!-- COLLECTIONS -->
-
-        <a
-            href="index.php#collections">
-
-            Collections
-
-            <span>⌄</span>
-
-        </a>
-
-
-        <!-- ABOUT -->
-
-        <a href="about.php">
-
-            About
-
-        </a>
-
-
-        <!-- CONTACT -->
-
-        <a href="contact.php">
-
-            Contact
-
-        </a>
-
+        <a href="cart.php">Cart</a>
 
     </nav>
 
 
     <div class="header-tools">
 
-
-        <!-- SEARCH -->
-
-        <button
-            class="header-icon"
-            type="button"
-            onclick="openSearch()"
-            title="Search">
-
-            <i class="fa-solid fa-magnifying-glass"></i>
-
-        </button>
-
-
-        <!-- PROFILE -->
-<a
-    class="header-icon profile-button"
-    href="<?= $logged_in
-        ? 'orders.php'
-        : 'login.php'
-    ?>"
-    title="My Profile"
-    aria-label="My Profile"
->
-
-    <i class="fa-regular fa-user"></i>
-
-</a>
-
-
-        <!-- CART -->
-
-        <a
-            class="header-icon cart-button"
-            href="cart.php"
-            title="Cart">
-
-            <i class="fa-solid fa-bag-shopping"></i>
-
-            <span id="cartCount">
-
-                <?= $cart_count ?>
-
-            </span>
-
-        </a>
-
-
-        <!-- ACCOUNT -->
-
         <?php if (
             $logged_in &&
-            $current_user
+            !empty($_SESSION["role"]) &&
+            $_SESSION["role"] === "admin"
         ): ?>
 
-
             <a
                 class="login-button"
-                href="orders.php">
-
-                <?= e(
-                    $current_user["full_name"]
-                ) ?>
-
+                href="http://localhost/Website/admin/index.php"
+                title="Admin Dashboard"
+            >
+                Admin Dashboard
             </a>
-
-
-            <a
-                class="signup-button"
-                href="logout.php">
-
-                Log Out
-
-            </a>
-
-
-        <?php else: ?>
-
-
-            <a
-                class="login-button"
-                href="login.php">
-
-                Log In
-
-            </a>
-
-
-            <a
-                class="signup-button"
-                href="signup.php">
-
-                Sign Up
-
-            </a>
-
 
         <?php endif; ?>
 
+        <?php if ($logged_in && $current_user): ?>
+
+            <a
+                class="signup-button"
+                href="logout.php"
+            >
+                Log Out
+            </a>
+
+        <?php else: ?>
+
+            <a
+                class="login-button"
+                href="login.php"
+            >
+                Log In
+            </a>
+
+            <a
+                class="signup-button"
+                href="signup.php"
+            >
+                Sign Up
+            </a>
+
+        <?php endif; ?>
 
     </div>
 

@@ -1,12 +1,19 @@
 /* =========================================================
    SIQUIJOR STYLES
    MAIN JAVASCRIPT
-   DATABASE / PHP VERSION
+   COMPLETE STOREFRONT VERSION
+
+   IMPORTANT:
+   - Cart data is stored in the database.
+   - Add to Cart uses php/cart_process.php.
+   - cart.php owns its page-specific cart controls.
+   - checkout.php reads the same database cart.
+   - No profile icon or header UI is created by this file.
 ========================================================= */
 
 
 /* =========================================================
-   GLOBAL
+   GLOBAL STATE
 ========================================================= */
 
 let cart = [];
@@ -14,60 +21,87 @@ let currentQuickProduct = null;
 
 
 /* =========================================================
-   RETURN PAGE
+   PAGE / RETURN URL HELPERS
 ========================================================= */
 
 function getCurrentPage() {
 
-    const path = window.location.pathname;
+    const path =
+        window.location.pathname || "";
 
     const filename =
-        path.substring(path.lastIndexOf("/") + 1);
+        path.substring(
+            path.lastIndexOf("/") + 1
+        );
 
-    if (!filename) {
-        return "index.php";
-    }
-
-    return filename;
+    return filename || "index.php";
 }
 
 
 function saveReturnPage() {
 
-    const currentPage = getCurrentPage();
+    const page =
+        getCurrentPage();
 
     if (
-        currentPage === "login.php" ||
-        currentPage === "signup.php"
+        page === "login.php" ||
+        page === "signup.php"
     ) {
+
         return;
+
     }
 
-    const currentURL =
+    const url =
         window.location.pathname +
         window.location.search +
         window.location.hash;
 
-    sessionStorage.setItem(
-        "siquijorReturnPage",
-        currentURL
-    );
+    try {
+
+        sessionStorage.setItem(
+            "siquijorReturnPage",
+            url
+        );
+
+    } catch (error) {
+
+        console.warn(
+            "Unable to save return page:",
+            error
+        );
+
+    }
+
 }
 
 
 function getReturnPage() {
 
-    const savedPage =
-        sessionStorage.getItem(
-            "siquijorReturnPage"
+    try {
+
+        const saved =
+            sessionStorage.getItem(
+                "siquijorReturnPage"
+            );
+
+        if (
+            saved &&
+            saved !== "login.php" &&
+            saved !== "signup.php"
+        ) {
+
+            return saved;
+
+        }
+
+    } catch (error) {
+
+        console.warn(
+            "Unable to read return page:",
+            error
         );
 
-    if (
-        savedPage &&
-        savedPage !== "login.php" &&
-        savedPage !== "signup.php"
-    ) {
-        return savedPage;
     }
 
     return "index.php";
@@ -76,26 +110,59 @@ function getReturnPage() {
 
 function clearReturnPage() {
 
-    sessionStorage.removeItem(
-        "siquijorReturnPage"
-    );
+    try {
+
+        sessionStorage.removeItem(
+            "siquijorReturnPage"
+        );
+
+    } catch (error) {
+
+        console.warn(
+            "Unable to clear return page:",
+            error
+        );
+
+    }
+
 }
 
 
 /* =========================================================
-   PAGE LOAD
+   FORMATTERS
 ========================================================= */
 
-document.addEventListener(
-    "DOMContentLoaded",
-    function () {
+function formatPrice(value) {
 
-        setupModalClosing();
+    const number =
+        Number(value) || 0;
 
-        loadCart();
+    return number.toLocaleString(
+        "en-PH",
+        {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }
+    );
 
-    }
-);
+}
+
+
+function escapeHTML(value) {
+
+    const div =
+        document.createElement(
+            "div"
+        );
+
+    div.textContent =
+        value == null
+            ? ""
+            : String(value);
+
+    return div.innerHTML;
+
+}
 
 
 /* =========================================================
@@ -108,11 +175,19 @@ function openModal(id) {
         document.getElementById(id);
 
     if (!modal) {
+
         return;
+
     }
 
-    modal.classList.add("active");
-    modal.classList.add("show");
+    modal.classList.add(
+        "active"
+    );
+
+    modal.classList.add(
+        "show"
+    );
+
 }
 
 
@@ -122,379 +197,515 @@ function closeModal(id) {
         document.getElementById(id);
 
     if (!modal) {
+
         return;
+
     }
 
-    modal.classList.remove("active");
-    modal.classList.remove("show");
+    modal.classList.remove(
+        "active"
+    );
+
+    modal.classList.remove(
+        "show"
+    );
+
 }
 
 
 function setupModalClosing() {
 
     document
-        .querySelectorAll(".modal")
-        .forEach(function (modal) {
+        .querySelectorAll(
+            ".modal"
+        )
+        .forEach(
+            function (modal) {
 
-            modal.addEventListener(
-                "click",
-                function (event) {
+                if (
+                    modal.dataset
+                        .modalCloseReady === "1"
+                ) {
 
-                    if (
-                        event.target === modal
-                    ) {
-
-                        modal.classList.remove(
-                            "active"
-                        );
-
-                        modal.classList.remove(
-                            "show"
-                        );
-
-                    }
+                    return;
 
                 }
-            );
 
-        });
+                modal.dataset
+                    .modalCloseReady = "1";
+
+                modal.addEventListener(
+                    "click",
+                    function (event) {
+
+                        if (
+                            event.target ===
+                            modal
+                        ) {
+
+                            modal.classList.remove(
+                                "active"
+                            );
+
+                            modal.classList.remove(
+                                "show"
+                            );
+
+                        }
+
+                    }
+                );
+
+            }
+        );
 
 }
 
+
+/* =========================================================
+   CLOSE MODALS WITH ESCAPE
+========================================================= */
 
 document.addEventListener(
     "keydown",
     function (event) {
 
-        if (event.key !== "Escape") {
+        if (
+            event.key !== "Escape"
+        ) {
+
             return;
+
         }
 
         document
-            .querySelectorAll(".modal")
-            .forEach(function (modal) {
+            .querySelectorAll(
+                ".modal"
+            )
+            .forEach(
+                function (modal) {
 
-                modal.classList.remove(
-                    "active"
-                );
+                    modal.classList.remove(
+                        "active"
+                    );
 
-                modal.classList.remove(
-                    "show"
-                );
+                    modal.classList.remove(
+                        "show"
+                    );
 
-            });
+                }
+            );
 
     }
 );
 
 
 /* =========================================================
-   PRICE FORMAT
+   CART API
 ========================================================= */
 
-function formatPrice(value) {
+async function cartRequest(
+    action,
+    extraData = {}
+) {
 
-    return Number(
-        value || 0
-    ).toLocaleString(
-        "en-PH",
-        {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
+    const formData =
+        new FormData();
+
+    formData.append(
+        "action",
+        action
+    );
+
+    Object.keys(
+        extraData
+    ).forEach(
+        function (key) {
+
+            formData.append(
+                key,
+                extraData[key]
+            );
+
         }
     );
 
-}
+    const response =
+        await fetch(
+            "php/cart_process.php",
+            {
+                method:
+                    "POST",
 
+                body:
+                    formData,
 
-/* =========================================================
-   HTML ESCAPE
-========================================================= */
+                credentials:
+                    "same-origin",
 
-function escapeHTML(value) {
+                cache:
+                    "no-store",
 
-    const div =
-        document.createElement(
-            "div"
+                headers:
+                    {
+                        "Accept":
+                            "application/json"
+                    }
+            }
         );
 
-    div.textContent =
-        value ?? "";
+    const text =
+        await response.text();
 
-    return div.innerHTML;
+    console.log(
+        "Cart API response:",
+        text
+    );
 
-}
-
-
-/* =========================================================
-   LOGIN
-========================================================= */
-
-function openLogin() {
-
-    closeModal("signupModal");
-
-    closeModal("profileModal");
-
-    const loginModal =
-        document.getElementById(
-            "loginModal"
-        );
-
-    if (loginModal) {
-
-        openModal(
-            "loginModal"
-        );
-
-        return;
-    }
-
-    saveReturnPage();
-
-    window.location.href =
-        "login.php";
-}
-
-
-async function login(event) {
-
-    event.preventDefault();
-
-
-    const emailElement =
-        document.getElementById(
-            "loginEmail"
-        );
-
-
-    const passwordElement =
-        document.getElementById(
-            "loginPassword"
-        );
-
-
-    if (
-        !emailElement ||
-        !passwordElement
-    ) {
-
-        saveReturnPage();
-
-        window.location.href =
-            "login.php";
-
-        return;
-    }
-
-
-    const email =
-        emailElement.value.trim();
-
-
-    const password =
-        passwordElement.value;
-
-
-    if (
-        !email ||
-        !password
-    ) {
-
-        alert(
-            "Please enter your email and password."
-        );
-
-        return;
-    }
-
+    let data;
 
     try {
 
-        const formData =
-            new FormData();
-
-
-        formData.append(
-            "email",
-            email
-        );
-
-
-        formData.append(
-            "password",
-            password
-        );
-
-
-        const response =
-            await fetch(
-                "php/login_process.php",
-                {
-                    method: "POST",
-                    body: formData,
-                    credentials: "same-origin"
-                }
+        data =
+            JSON.parse(
+                text
             );
-
-
-        const responseText =
-            await response.text();
-
-
-        let data;
-
-
-        try {
-
-            data =
-                JSON.parse(
-                    responseText
-                );
-
-        } catch (jsonError) {
-
-            console.error(
-                "Login server response:",
-                responseText
-            );
-
-            alert(
-                "The server returned an unexpected response. Please check PHP."
-            );
-
-            return;
-        }
-
-
-        if (!data.success) {
-
-            alert(
-                data.message ||
-                "Login failed."
-            );
-
-
-            const message =
-                String(
-                    data.message || ""
-                ).toLowerCase();
-
-
-            if (
-                message.includes(
-                    "no account was found"
-                )
-            ) {
-
-                const goToSignup =
-                    confirm(
-                        "No account was found with this email.\n\nWould you like to sign up now?"
-                    );
-
-
-                if (goToSignup) {
-
-                    saveReturnPage();
-
-                    window.location.href =
-                        "signup.php";
-                }
-            }
-
-
-            return;
-        }
-
-
-        alert(
-            data.message ||
-            "Login successful."
-        );
-
-
-        closeModal(
-            "loginModal"
-        );
-
-
-        /* =====================================================
-           ADMIN REDIRECT
-
-           Admin users ALWAYS go directly to:
-
-           http://localhost/Website/admin/index.php
-        ===================================================== */
-
-        if (
-            data.user &&
-            String(
-                data.user.role
-            ).toLowerCase() === "admin"
-        ) {
-
-            clearReturnPage();
-
-            window.location.href =
-                "http://localhost/Website/admin/index.php";
-
-            return;
-        }
-
-
-        /* =====================================================
-           NORMAL CUSTOMER LOGIN
-        ===================================================== */
-
-        const returnPage =
-            getReturnPage();
-
-
-        clearReturnPage();
-
-
-        window.location.href =
-            returnPage;
-
 
     } catch (error) {
 
         console.error(
-            "Login error:",
-            error
+            "Invalid cart JSON:",
+            text
         );
 
-
-        alert(
-            "Unable to connect to the server."
+        throw new Error(
+            "The cart server returned an unexpected response.\n\nPlease check php/cart_process.php."
         );
+
     }
+
+    return data;
+
 }
 
 
 /* =========================================================
-   CHECK LOGIN / GUEST
+   EXTRACT CART ITEMS
 ========================================================= */
 
-function showLoginRequired() {
+function extractCartItems(data) {
 
-    saveReturnPage();
+    if (
+        !data ||
+        typeof data !== "object"
+    ) {
+
+        return [];
+
+    }
+
+    if (
+        data.data &&
+        Array.isArray(
+            data.data.cart
+        )
+    ) {
+
+        return data.data.cart;
+
+    }
+
+    if (
+        data.data &&
+        Array.isArray(
+            data.data.items
+        )
+    ) {
+
+        return data.data.items;
+
+    }
+
+    if (
+        Array.isArray(
+            data.cart
+        )
+    ) {
+
+        return data.cart;
+
+    }
+
+    if (
+        Array.isArray(
+            data.items
+        )
+    ) {
+
+        return data.items;
+
+    }
+
+    return [];
+
+}
 
 
-    alert(
-        "Please log in first before adding products to your cart."
-    );
+/* =========================================================
+   EXTRACT CART COUNT
+========================================================= */
 
+function extractCartCount(data) {
 
-    setTimeout(
-        function () {
+    if (
+        !data ||
+        typeof data !== "object"
+    ) {
 
-            window.location.href =
-                "login.php";
+        return 0;
+
+    }
+
+    if (
+        data.data &&
+        data.data.total_items !==
+            undefined
+    ) {
+
+        return Number(
+            data.data.total_items
+        ) || 0;
+
+    }
+
+    if (
+        data.total_items !==
+            undefined
+    ) {
+
+        return Number(
+            data.total_items
+        ) || 0;
+
+    }
+
+    const items =
+        extractCartItems(
+            data
+        );
+
+    return items.reduce(
+        function (
+            total,
+            item
+        ) {
+
+            return (
+                total +
+                (
+                    Number(
+                        item.quantity
+                    ) || 0
+                )
+            );
 
         },
-        100
+        0
     );
+
+}
+
+
+/* =========================================================
+   LOAD CART
+========================================================= */
+
+async function loadCart() {
+
+    try {
+
+        const data =
+            await cartRequest(
+                "get"
+            );
+
+        if (
+            !data.success
+        ) {
+
+            cart = [];
+
+            updateCartCount(
+                0
+            );
+
+            updateShopStockDisplays();
+
+            return data;
+
+        }
+
+        cart =
+            extractCartItems(
+                data
+            ).map(
+                function (item) {
+
+                    const productId =
+                        Number(
+                            item.product_id ??
+                            item.productId ??
+                            item.id ??
+                            0
+                        );
+
+                    const productName =
+                        item.product_name ??
+                        item.productName ??
+                        item.name ??
+                        "Product";
+
+                    return {
+
+                        id:
+                            productId,
+
+                        productId:
+                            productId,
+
+                        product_id:
+                            productId,
+
+                        name:
+                            productName,
+
+                        product_name:
+                            productName,
+
+                        price:
+                            Number(
+                                item.price
+                            ) || 0,
+
+                        quantity:
+                            Number(
+                                item.quantity
+                            ) || 0,
+
+                        stock:
+                            item.stock === null ||
+                            item.stock === undefined
+                                ? null
+                                : Number(
+                                    item.stock
+                                ),
+
+                        image:
+                            item.image ??
+                            ""
+
+                    };
+
+                }
+            );
+
+        updateCartCount(
+            extractCartCount(
+                data
+            )
+        );
+
+        updateShopStockDisplays();
+
+        return data;
+
+    } catch (error) {
+
+        console.error(
+            "Cart loading error:",
+            error
+        );
+
+        cart = [];
+
+        updateCartCount(
+            0
+        );
+
+        updateShopStockDisplays();
+
+        return {
+
+            success:
+                false,
+
+            server_error:
+                true,
+
+            message:
+                error.message
+
+        };
+
+    }
+
+}
+
+
+/* =========================================================
+   CART COUNT
+
+   This only updates the existing
+   cart count element.
+
+   It DOES NOT create icons.
+========================================================= */
+
+function updateCartCount(
+    count = null
+) {
+
+    const element =
+        document.getElementById(
+            "cartCount"
+        );
+
+    if (!element) {
+
+        return;
+
+    }
+
+    if (
+        count === null
+    ) {
+
+        count =
+            cart.reduce(
+                function (
+                    total,
+                    item
+                ) {
+
+                    return (
+                        total +
+                        (
+                            Number(
+                                item.quantity
+                            ) || 0
+                        )
+                    );
+
+                },
+                0
+            );
+
+    }
+
+    element.textContent =
+        String(
+            count
+        );
 
 }
 
@@ -505,18 +716,20 @@ function showLoginRequired() {
 
 async function addToCart(
     productId,
-    productName,
-    price,
+    productName = "Product",
+    price = 0,
     stock = null
 ) {
 
     productId =
-        Number(productId);
-
+        Number(
+            productId
+        );
 
     price =
-        Number(price) || 0;
-
+        Number(
+            price
+        ) || 0;
 
     if (
         !productId ||
@@ -527,16 +740,16 @@ async function addToCart(
             "Invalid product."
         );
 
-        return;
+        return false;
 
     }
 
 
     /*
-     * Check the amount already in this
-     * user's cart before sending another
-     * request to the server.
+     * Read the current database cart.
      */
+    await loadCart();
+
 
     const existingItem =
         cart.find(
@@ -561,26 +774,33 @@ async function addToCart(
             : 0;
 
 
+    /*
+     * Check the available stock shown
+     * by the Shop page.
+     */
     if (
         stock !== null &&
         stock !== undefined
     ) {
 
-        const availableStock =
-            Number(stock);
-
+        const available =
+            Number(
+                stock
+            );
 
         if (
-            !isNaN(availableStock) &&
+            !Number.isNaN(
+                available
+            ) &&
             currentQuantity >=
-            availableStock
+                available
         ) {
 
             alert(
                 "You have already added the maximum available quantity of this product."
             );
 
-            return;
+            return false;
 
         }
 
@@ -589,136 +809,94 @@ async function addToCart(
 
     try {
 
-        const formData =
-            new FormData();
-
-
-        formData.append(
-            "action",
-            "add"
-        );
-
-
-        formData.append(
-            "product_id",
-            productId
-        );
-
-
-        formData.append(
-            "quantity",
-            "1"
-        );
-
-
-        const response =
-            await fetch(
-                "php/cart_process.php",
+        const data =
+            await cartRequest(
+                "add",
                 {
-                    method: "POST",
-                    body: formData,
-                    credentials: "same-origin"
+                    product_id:
+                        productId,
+
+                    quantity:
+                        1
                 }
             );
 
 
-        const responseText =
-            await response.text();
-
-
-        console.log(
-            "Cart server response:",
-            responseText
-        );
-
-
-        let data;
-
-
-        try {
-
-            data =
-                JSON.parse(
-                    responseText
-                );
-
-        } catch (jsonError) {
-
-            console.error(
-                "Invalid cart JSON response:",
-                responseText
-            );
-
-
-            alert(
-                "The cart server returned an unexpected response.\n\n" +
-                "Please check php/cart_process.php."
-            );
-
-
-            return;
-
-        }
-
-
-        if (!data.success) {
+        if (
+            !data.success
+        ) {
 
             const message =
                 String(
                     data.message ||
-                    ""
+                    "Unable to add the product to your cart."
                 );
 
 
-            const lowerMessage =
+            const lower =
                 message.toLowerCase();
 
 
             const loginRequired =
-                lowerMessage.includes(
-                    "please log in"
+                lower.includes(
+                    "log in"
                 ) ||
-                lowerMessage.includes(
+                lower.includes(
                     "login required"
                 ) ||
-                lowerMessage.includes(
-                    "authentication required"
-                ) ||
-                lowerMessage.includes(
+                lower.includes(
                     "not logged in"
+                ) ||
+                lower.includes(
+                    "authentication required"
                 );
 
 
-            if (loginRequired) {
+            if (
+                loginRequired
+            ) {
 
-                showLoginRequired();
+                saveReturnPage();
 
-                return;
+                window.location.href =
+                    "login.php";
+
+                return false;
 
             }
 
 
             alert(
-                message ||
-                "Unable to add product to cart."
+                message
             );
 
-
-            return;
+            return false;
 
         }
 
 
+        /*
+         * Reload from the database after
+         * the successful insert/update.
+         */
         await loadCart();
+
+
+        updateShopStockDisplays();
 
 
         alert(
             data.message ||
             (
-                (productName || "Product") +
+                String(
+                    productName
+                ) +
                 " has been added to your cart."
             )
         );
+
+
+        return true;
 
 
     } catch (error) {
@@ -730,9 +908,12 @@ async function addToCart(
 
 
         alert(
-            "Unable to add the product to your cart.\n\n" +
-            "Please check that Apache and MySQL are running."
+            error.message ||
+            "Unable to add the product to your cart."
         );
+
+
+        return false;
 
     }
 
@@ -740,706 +921,212 @@ async function addToCart(
 
 
 /* =========================================================
-   RENDER CART
+   SHOP STOCK DISPLAY
 ========================================================= */
 
-function renderCart() {
+function updateShopStockDisplays() {
 
-    const cartItems =
-        document.getElementById(
-            "cartItems"
-        );
+    document
+        .querySelectorAll(
+            ".product-card"
+        )
+        .forEach(
+            function (card) {
 
-
-    const cartTotal =
-        document.getElementById(
-            "cartTotal"
-        );
-
-
-    if (
-        !cartItems ||
-        !cartTotal
-    ) {
-
-        return;
-
-    }
-
-
-    if (
-        !cart ||
-        cart.length === 0
-    ) {
-
-        cartItems.innerHTML = `
-
-            <p class="empty-cart">
-                Your cart is empty.
-            </p>
-
-        `;
-
-
-        cartTotal.textContent =
-            "₱0.00";
-
-
-        updateCartCount();
-
-        return;
-
-    }
-
-
-    let total = 0;
-
-
-    cartItems.innerHTML =
-        "";
-
-
-    cart.forEach(
-        function (item) {
-
-            const productId =
-                Number(
-                    item.productId ??
-                    item.product_id ??
-                    item.id ??
-                    0
-                );
-
-
-            const price =
-                Number(
-                    item.price
-                ) || 0;
-
-
-            const quantity =
-                Number(
-                    item.quantity
-                ) || 0;
-
-
-            const stock =
-                item.stock !== null &&
-                item.stock !== undefined
-                    ? Number(item.stock)
-                    : null;
-
-
-            const subtotal =
-                price * quantity;
-
-
-            total +=
-                subtotal;
-
-
-            const itemElement =
-                document.createElement(
-                    "div"
-                );
-
-
-            itemElement.className =
-                "cart-item";
-
-
-            let stockMessage =
-                "";
-
-
-            if (
-                !isNaN(stock)
-            ) {
+                const productId =
+                    Number(
+                        card.dataset
+                            .productId ||
+                        0
+                    );
 
                 if (
-                    stock <= 0
+                    !productId
                 ) {
 
-                    stockMessage = `
-                        <small class="out-of-stock">
-                            Out of Stock
-                        </small>
-                    `;
+                    return;
 
                 }
 
-                else {
 
-                    const remaining =
-                        stock -
-                        quantity;
+                let originalStock =
+                    Number(
+                        card.dataset
+                            .originalStock
+                    );
 
+
+                if (
+                    Number.isNaN(
+                        originalStock
+                    ) ||
+                    originalStock < 0
+                ) {
+
+                    originalStock =
+                        Number(
+                            card.dataset.stock
+                        );
+
+                }
+
+
+                if (
+                    Number.isNaN(
+                        originalStock
+                    ) ||
+                    originalStock < 0
+                ) {
+
+                    return;
+
+                }
+
+
+                card.dataset
+                    .originalStock =
+                        String(
+                            originalStock
+                        );
+
+
+                const cartItem =
+                    cart.find(
+                        function (item) {
+
+                            return Number(
+                                item.productId ??
+                                item.product_id ??
+                                item.id ??
+                                0
+                            ) === productId;
+
+                        }
+                    );
+
+
+                const quantityInCart =
+                    cartItem
+                        ? Number(
+                            cartItem.quantity
+                        ) || 0
+                        : 0;
+
+
+                const remaining =
+                    Math.max(
+                        0,
+                        originalStock -
+                        quantityInCart
+                    );
+
+
+                card.dataset.stock =
+                    String(
+                        remaining
+                    );
+
+
+                const stockElement =
+                    card.querySelector(
+                        ".product-stock"
+                    );
+
+
+                const addButton =
+                    card.querySelector(
+                        ".add-cart"
+                    );
+
+
+                if (
+                    stockElement
+                ) {
 
                     if (
-                        remaining <= 0
+                        remaining <=
+                            0
                     ) {
 
-                        stockMessage = `
-                            <small>
-                                Maximum available quantity reached.
-                            </small>
-                        `;
+                        stockElement.textContent =
+                            "Out of Stock";
+
+                        stockElement.classList.add(
+                            "out-of-stock"
+                        );
+
+                    } else {
+
+                        stockElement.textContent =
+                            "Stock: " +
+                            remaining;
+
+                        stockElement.classList.remove(
+                            "out-of-stock"
+                        );
 
                     }
 
-                    else {
+                }
 
-                        stockMessage = `
-                            <small>
-                                ${remaining} remaining
-                            </small>
-                        `;
+
+                if (
+                    addButton
+                ) {
+
+                    if (
+                        remaining <=
+                            0
+                    ) {
+
+                        addButton.disabled =
+                            true;
+
+                        addButton.textContent =
+                            "OUT OF STOCK";
+
+                    } else {
+
+                        addButton.disabled =
+                            false;
+
+                        addButton.textContent =
+                            "🛒 Add to Cart";
 
                     }
 
                 }
 
             }
+        );
+
+}
 
 
-            itemElement.innerHTML = `
+/* =========================================================
+   OPEN CART MODAL
+========================================================= */
 
-                <div class="cart-item-info">
+async function openCart() {
 
-                    ${
-                        item.image
-                            ? `
-                                <img
-                                    src="images/${escapeHTML(
-                                        item.image
-                                    )}"
-                                    alt="${escapeHTML(
-                                        item.name
-                                    )}"
-                                    class="cart-item-image"
-                                    onerror="this.style.display='none';"
-                                >
-                              `
-                            : ""
-                    }
+    await loadCart();
 
-                    <div>
+    /*
+     * Some pages may have their own
+     * renderCart() function.
+     */
+    if (
+        typeof renderCart ===
+        "function"
+    ) {
 
-                        <strong>
-                            ${escapeHTML(
-                                item.name
-                            )}
-                        </strong>
+        renderCart();
 
-                        <small>
-                            ₱${formatPrice(
-                                price
-                            )} each
-                        </small>
+    }
 
-                        ${stockMessage}
-
-                    </div>
-
-                </div>
-
-
-                <div class="cart-item-controls">
-
-                    <button
-                        type="button"
-                        onclick="changeCartQuantity(
-                            ${productId},
-                            ${quantity - 1}
-                        )">
-
-                        −
-
-                    </button>
-
-
-                    <span>
-                        ${quantity}
-                    </span>
-
-
-                    <button
-                        type="button"
-                        onclick="changeCartQuantity(
-                            ${productId},
-                            ${quantity + 1}
-                        )">
-
-                        +
-
-                    </button>
-
-
-                    <button
-                        type="button"
-                        class="remove-cart-item"
-                        onclick="removeFromCart(
-                            ${productId}
-                        )">
-
-                        ×
-
-                    </button>
-
-                </div>
-
-
-                <strong class="cart-item-subtotal">
-
-                    ₱${formatPrice(
-                        subtotal
-                    )}
-
-                </strong>
-
-            `;
-
-
-            cartItems.appendChild(
-                itemElement
-            );
-
-        }
+    openModal(
+        "cartModal"
     );
-
-
-    cartTotal.textContent =
-        "₱" +
-        formatPrice(
-            total
-        );
-
-
-    updateCartCount();
-
-}
-
-
-/* =========================================================
-   CHANGE CART QUANTITY
-========================================================= */
-
-async function changeCartQuantity(
-    productId,
-    quantity
-) {
-
-    productId =
-        Number(productId);
-
-
-    quantity =
-        Number(quantity);
-
-
-    if (
-        !productId ||
-        productId <= 0
-    ) {
-
-        return;
-
-    }
-
-
-    if (
-        quantity <= 0
-    ) {
-
-        await removeFromCart(
-            productId
-        );
-
-        return;
-
-    }
-
-
-    const item =
-        cart.find(
-            function (cartItem) {
-
-                return Number(
-                    cartItem.productId ??
-                    cartItem.product_id ??
-                    cartItem.id ??
-                    0
-                ) === productId;
-
-            }
-        );
-
-
-    if (
-        item &&
-        item.stock !== null &&
-        item.stock !== undefined
-    ) {
-
-        const stock =
-            Number(
-                item.stock
-            );
-
-
-        if (
-            !isNaN(stock) &&
-            quantity > stock
-        ) {
-
-            alert(
-                "Only " +
-                stock +
-                " unit(s) are available."
-            );
-
-            return;
-
-        }
-
-    }
-
-
-    try {
-
-        const formData =
-            new FormData();
-
-
-        formData.append(
-            "action",
-            "update"
-        );
-
-
-        formData.append(
-            "product_id",
-            productId
-        );
-
-
-        formData.append(
-            "quantity",
-            quantity
-        );
-
-
-        const response =
-            await fetch(
-                "php/cart_process.php",
-                {
-                    method: "POST",
-                    body: formData,
-                    credentials: "same-origin"
-                }
-            );
-
-
-        const responseText =
-            await response.text();
-
-
-        let data;
-
-
-        try {
-
-            data =
-                JSON.parse(
-                    responseText
-                );
-
-        } catch (jsonError) {
-
-            console.error(
-                "Update cart response:",
-                responseText
-            );
-
-
-            alert(
-                "The server returned an unexpected response."
-            );
-
-
-            return;
-
-        }
-
-
-        if (!data.success) {
-
-            alert(
-                data.message ||
-                "Unable to update cart."
-            );
-
-            return;
-
-        }
-
-
-        await loadCart();
-
-        renderCart();
-
-
-    } catch (error) {
-
-        console.error(
-            "Quantity update error:",
-            error
-        );
-
-
-        alert(
-            "Unable to connect to the server."
-        );
-
-    }
-
-}
-
-
-/* =========================================================
-   REMOVE FROM CART
-========================================================= */
-
-async function removeFromCart(
-    productId
-) {
-
-    productId =
-        Number(productId);
-
-
-    if (
-        !productId ||
-        productId <= 0
-    ) {
-
-        return;
-
-    }
-
-
-    try {
-
-        const formData =
-            new FormData();
-
-
-        formData.append(
-            "action",
-            "remove"
-        );
-
-
-        formData.append(
-            "product_id",
-            productId
-        );
-
-
-        const response =
-            await fetch(
-                "php/cart_process.php",
-                {
-                    method: "POST",
-                    body: formData,
-                    credentials: "same-origin"
-                }
-            );
-
-
-        const responseText =
-            await response.text();
-
-
-        let data;
-
-
-        try {
-
-            data =
-                JSON.parse(
-                    responseText
-                );
-
-        } catch (jsonError) {
-
-            console.error(
-                "Remove cart response:",
-                responseText
-            );
-
-
-            alert(
-                "The server returned an unexpected response."
-            );
-
-
-            return;
-
-        }
-
-
-        if (!data.success) {
-
-            alert(
-                data.message ||
-                "Unable to remove item."
-            );
-
-            return;
-
-        }
-
-
-        await loadCart();
-
-        renderCart();
-
-
-    } catch (error) {
-
-        console.error(
-            "Remove cart error:",
-            error
-        );
-
-
-        alert(
-            "Unable to connect to the server."
-        );
-
-    }
-
-}
-
-
-/* =========================================================
-   CLEAR CART
-========================================================= */
-
-async function clearCart() {
-
-    if (
-        !cart ||
-        cart.length === 0
-    ) {
-
-        return;
-
-    }
-
-
-    const confirmed =
-        confirm(
-            "Remove all items from your cart?"
-        );
-
-
-    if (!confirmed) {
-        return;
-    }
-
-
-    try {
-
-        const formData =
-            new FormData();
-
-
-        formData.append(
-            "action",
-            "clear"
-        );
-
-
-        const response =
-            await fetch(
-                "php/cart_process.php",
-                {
-                    method: "POST",
-                    body: formData,
-                    credentials: "same-origin"
-                }
-            );
-
-
-        const responseText =
-            await response.text();
-
-
-        let data;
-
-
-        try {
-
-            data =
-                JSON.parse(
-                    responseText
-                );
-
-        } catch (jsonError) {
-
-            console.error(
-                "Clear cart response:",
-                responseText
-            );
-
-
-            alert(
-                "The server returned an unexpected response."
-            );
-
-
-            return;
-
-        }
-
-
-        if (!data.success) {
-
-            alert(
-                data.message ||
-                "Unable to clear cart."
-            );
-
-            return;
-
-        }
-
-
-        cart = [];
-
-
-        renderCart();
-
-        updateCartCount();
-
-        updateShopStockDisplays();
-
-
-    } catch (error) {
-
-        console.error(
-            "Clear cart error:",
-            error
-        );
-
-
-        alert(
-            "Unable to connect to the server."
-        );
-
-    }
 
 }
 
@@ -1450,85 +1137,54 @@ async function clearCart() {
 
 async function checkout() {
 
-    if (
-        !cart ||
-        cart.length === 0
-    ) {
-
-        alert(
-            "Your cart is empty."
-        );
-
-        return;
-
-    }
-
-
     try {
 
-        const response =
-            await fetch(
-                "php/cart_process.php",
-                {
-                    method: "POST",
-                    body: new URLSearchParams({
-                        action: "get"
-                    }),
-                    credentials: "same-origin"
-                }
+        const data =
+            await cartRequest(
+                "get"
             );
 
 
-        const responseText =
-            await response.text();
-
-
-        let data;
-
-
-        try {
-
-            data =
-                JSON.parse(
-                    responseText
-                );
-
-        } catch (jsonError) {
-
-            console.error(
-                "Checkout response:",
-                responseText
-            );
-
-
-            alert(
-                "Unable to verify your cart."
-            );
-
-
-            return;
-
-        }
-
-
-        if (!data.success) {
+        if (
+            !data.success
+        ) {
 
             saveReturnPage();
-
 
             alert(
                 data.message ||
                 "Please log in before checking out."
             );
 
-
             window.location.href =
                 "login.php";
-
 
             return;
 
         }
+
+
+        const items =
+            extractCartItems(
+                data
+            );
+
+
+        if (
+            items.length === 0
+        ) {
+
+            alert(
+                "Your cart is empty."
+            );
+
+            return;
+
+        }
+
+
+        window.location.href =
+            "checkout.php";
 
 
     } catch (error) {
@@ -1538,19 +1194,12 @@ async function checkout() {
             error
         );
 
-
         alert(
+            error.message ||
             "Unable to verify your cart."
         );
 
-
-        return;
-
     }
-
-
-    window.location.href =
-        "checkout.php";
 
 }
 
@@ -1567,57 +1216,36 @@ function quickView(
 ) {
 
     productId =
-        Number(productId);
-
-
-    price =
-        Number(price);
-
-
-    stock =
-        stock !== null &&
-        stock !== undefined
-            ? Number(stock)
-            : null;
-
-
-    if (
-        !productId ||
-        productId <= 0
-    ) {
-
-        alert(
-            "Invalid product."
+        Number(
+            productId
         );
 
-        return;
+    price =
+        Number(
+            price
+        ) || 0;
 
-    }
 
-
-    /*
-     * Use the current remaining stock
-     * when the product card has been
-     * updated after adding to cart.
-     */
-
-    const productCard =
+    const card =
         document.querySelector(
             `.product-card[data-product-id="${productId}"]`
         );
 
 
-    if (productCard) {
+    if (
+        card
+    ) {
 
         const displayedStock =
             Number(
-                productCard.dataset.stock
+                card.dataset.stock
             );
 
 
         if (
-            !isNaN(displayedStock) &&
-            displayedStock >= 0
+            !Number.isNaN(
+                displayedStock
+            )
         ) {
 
             stock =
@@ -1663,13 +1291,15 @@ function quickView(
         );
 
 
-    const quickImage =
+    const imageContainer =
         document.querySelector(
             "#quickViewModal .quick-image"
         );
 
 
-    if (nameElement) {
+    if (
+        nameElement
+    ) {
 
         nameElement.textContent =
             productName;
@@ -1677,7 +1307,9 @@ function quickView(
     }
 
 
-    if (priceElement) {
+    if (
+        priceElement
+    ) {
 
         priceElement.textContent =
             "₱" +
@@ -1688,62 +1320,52 @@ function quickView(
     }
 
 
-    if (quickImage) {
+    if (
+        imageContainer
+    ) {
 
-        if (productCard) {
+        let source =
+            null;
 
-            const sourceImage =
-                productCard.querySelector(
-                    ".product-image img"
+
+        if (
+            card
+        ) {
+
+            source =
+                card.querySelector(
+                    ".product-image img, .shop-product-image"
                 );
-
-
-            if (
-                sourceImage &&
-                sourceImage.getAttribute(
-                    "src"
-                )
-            ) {
-
-                quickImage.innerHTML = `
-
-                    <img
-                        src="${escapeHTML(
-                            sourceImage.getAttribute(
-                                "src"
-                            )
-                        )}"
-                        alt="${escapeHTML(
-                            productName
-                        )}"
-                    >
-
-                `;
-
-            }
-
-            else {
-
-                quickImage.innerHTML = `
-
-                    <span>
-                        PRODUCT IMAGE
-                    </span>
-
-                `;
-
-            }
 
         }
 
-        else {
 
-            quickImage.innerHTML = `
+        if (
+            source &&
+            source.getAttribute(
+                "src"
+            )
+        ) {
 
+            imageContainer.innerHTML = `
+                <img
+                    src="${escapeHTML(
+                        source.getAttribute(
+                            "src"
+                        )
+                    )}"
+                    alt="${escapeHTML(
+                        productName
+                    )}"
+                >
+            `;
+
+        } else {
+
+            imageContainer.innerHTML = `
                 <span>
                     PRODUCT IMAGE
                 </span>
-
             `;
 
         }
@@ -1751,7 +1373,9 @@ function quickView(
     }
 
 
-    if (button) {
+    if (
+        button
+    ) {
 
         button.disabled =
             false;
@@ -1763,13 +1387,12 @@ function quickView(
 
         if (
             stock !== null &&
-            !isNaN(stock) &&
-            stock <= 0
+            stock !== undefined &&
+            Number(stock) <= 0
         ) {
 
             button.disabled =
                 true;
-
 
             button.textContent =
                 "OUT OF STOCK";
@@ -1792,13 +1415,17 @@ function quickView(
 
                 await addToCart(
 
-                    currentQuickProduct.productId,
+                    currentQuickProduct
+                        .productId,
 
-                    currentQuickProduct.name,
+                    currentQuickProduct
+                        .name,
 
-                    currentQuickProduct.price,
+                    currentQuickProduct
+                        .price,
 
-                    currentQuickProduct.stock
+                    currentQuickProduct
+                        .stock
 
                 );
 
@@ -1818,10 +1445,16 @@ function quickView(
    FAVORITES
 ========================================================= */
 
-function favoriteProduct(button) {
+function favoriteProduct(
+    button
+) {
 
-    if (!button) {
+    if (
+        !button
+    ) {
+
         return;
+
     }
 
 
@@ -1830,23 +1463,12 @@ function favoriteProduct(button) {
     );
 
 
-    if (
+    button.textContent =
         button.classList.contains(
             "favorite-active"
         )
-    ) {
-
-        button.textContent =
-            "♥";
-
-    }
-
-    else {
-
-        button.textContent =
-            "♡";
-
-    }
+            ? "♥"
+            : "♡";
 
 }
 
@@ -1868,7 +1490,9 @@ function openSearch() {
         );
 
 
-    if (input) {
+    if (
+        input
+    ) {
 
         input.focus();
 
@@ -1903,7 +1527,7 @@ function searchProducts() {
     }
 
 
-    const search =
+    const query =
         input.value
             .trim()
             .toLowerCase();
@@ -1919,141 +1543,150 @@ function searchProducts() {
         "";
 
 
-    if (search === "") {
+    if (
+        !query
+    ) {
 
         results.innerHTML = `
-
             <p>
                 Start typing to search products.
             </p>
-
         `;
-
 
         return;
 
     }
 
 
-    let found = 0;
+    let found =
+        0;
 
 
     products.forEach(
         function (product) {
 
             const name =
-                (
+                String(
                     product.dataset.name ||
                     ""
                 ).toLowerCase();
 
 
-            const productText =
+            const text =
                 product.textContent
                     .toLowerCase();
 
 
             if (
-                name.includes(search) ||
-                productText.includes(search)
+                !name.includes(
+                    query
+                ) &&
+                !text.includes(
+                    query
+                )
             ) {
 
-                found++;
+                return;
+
+            }
 
 
-                const productId =
-                    Number(
-                        product.dataset.productId
-                    );
+            found++;
 
 
-                const productName =
-                    product.dataset.name;
+            const productId =
+                Number(
+                    product.dataset
+                        .productId
+                );
 
 
-                const price =
-                    Number(
-                        product.dataset.price
-                    );
+            const productName =
+                product.dataset.name ||
+                "Product";
 
 
-                const stock =
-                    product.dataset.stock !== undefined
-                        ? Number(
-                            product.dataset.stock
-                        )
-                        : null;
+            const price =
+                Number(
+                    product.dataset
+                        .price ||
+                    0
+                );
 
 
-                const result =
-                    document.createElement(
-                        "div"
-                    );
+            const stock =
+                Number(
+                    product.dataset
+                        .stock ||
+                    0
+                );
 
 
-                result.className =
-                    "search-result";
+            const result =
+                document.createElement(
+                    "div"
+                );
 
 
-                result.innerHTML = `
-
-                    <strong>
-                        ${escapeHTML(
-                            productName
-                        )}
-                    </strong>
-
-                    <span>
-                        ₱${formatPrice(
-                            price
-                        )}
-                    </span>
-
-                    <button
-                        type="button">
-
-                        View
-
-                    </button>
-
-                `;
+            result.className =
+                "search-result";
 
 
-                const viewButton =
-                    result.querySelector(
-                        "button"
-                    );
+            result.innerHTML = `
+                <strong>
+                    ${escapeHTML(
+                        productName
+                    )}
+                </strong>
+
+                <span>
+                    ₱${formatPrice(
+                        price
+                    )}
+                </span>
+
+                <button
+                    type="button">
+                    View
+                </button>
+            `;
 
 
-                if (viewButton) {
-
-                    viewButton.addEventListener(
-                        "click",
-                        function () {
-
-                            closeModal(
-                                "searchModal"
-                            );
+            const viewButton =
+                result.querySelector(
+                    "button"
+                );
 
 
-                            quickView(
-                                productId,
-                                productName,
-                                price,
-                                stock
-                            );
+            if (
+                viewButton
+            ) {
 
-                        }
-                    );
+                viewButton.addEventListener(
+                    "click",
+                    function () {
 
-                }
+                        closeModal(
+                            "searchModal"
+                        );
 
 
-                results.appendChild(
-                    result
+                        quickView(
+                            productId,
+                            productName,
+                            price,
+                            stock
+                        );
+
+                    }
                 );
 
             }
+
+
+            results.appendChild(
+                result
+            );
 
         }
     );
@@ -2064,18 +1697,14 @@ function searchProducts() {
     ) {
 
         results.innerHTML = `
-
             <p>
-
                 No products found for
                 "<strong>
                     ${escapeHTML(
-                        search
+                        query
                     )}
                 </strong>".
-
             </p>
-
         `;
 
     }
@@ -2084,73 +1713,66 @@ function searchProducts() {
 
 
 /* =========================================================
-   PRODUCT FILTER
+   SHOP FILTER
 ========================================================= */
 
-function filterProducts(category) {
+function filterProducts(
+    category
+) {
 
-    const products =
-        document.querySelectorAll(
+    const selected =
+        String(
+            category || ""
+        ).toLowerCase();
+
+
+    document
+        .querySelectorAll(
             ".product-card"
-        );
+        )
+        .forEach(
+            function (card) {
+
+                const cardCategory =
+                    String(
+                        card.dataset
+                            .category ||
+                        ""
+                    ).toLowerCase();
 
 
-    products.forEach(
-        function (product) {
-
-            const productCategory =
-                product.dataset.category ||
-                "";
-
-
-            if (
-                productCategory.toLowerCase() ===
-                String(
-                    category
-                ).toLowerCase()
-            ) {
-
-                product.style.display =
-                    "";
+                card.style.display =
+                    cardCategory ===
+                    selected
+                        ? ""
+                        : "none";
 
             }
-
-            else {
-
-                product.style.display =
-                    "none";
-
-            }
-
-        }
-    );
-
-
-    const shop =
-        document.getElementById(
-            "shop"
         );
 
 
     const shopSection =
+        document.getElementById(
+            "shop"
+        ) ||
         document.querySelector(
             ".shop-page-section"
         );
 
 
-    if (shop) {
+    if (
+        shopSection
+    ) {
 
-        shop.scrollIntoView({
-            behavior: "smooth"
-        });
+        shopSection.scrollIntoView(
+            {
+                behavior:
+                    "smooth",
 
-    }
-
-    else if (shopSection) {
-
-        shopSection.scrollIntoView({
-            behavior: "smooth"
-        });
+                block:
+                    "start"
+            }
+        );
 
     }
 
@@ -2159,49 +1781,621 @@ function filterProducts(category) {
 
 function showAllProducts() {
 
-    const products =
-        document.querySelectorAll(
+    document
+        .querySelectorAll(
             ".product-card"
-        );
+        )
+        .forEach(
+            function (card) {
 
+                card.style.display =
+                    "";
 
-    products.forEach(
-        function (product) {
-
-            product.style.display =
-                "";
-
-        }
-    );
-
-
-    const shop =
-        document.getElementById(
-            "shop"
+            }
         );
 
 
     const shopSection =
+        document.getElementById(
+            "shop"
+        ) ||
         document.querySelector(
             ".shop-page-section"
         );
 
 
-    if (shop) {
+    if (
+        shopSection
+    ) {
 
-        shop.scrollIntoView({
-            behavior: "smooth"
-        });
+        shopSection.scrollIntoView(
+            {
+                behavior:
+                    "smooth",
+
+                block:
+                    "start"
+            }
+        );
 
     }
 
-    else if (shopSection) {
+}
 
-        shopSection.scrollIntoView({
-            behavior: "smooth"
-        });
+
+/* =========================================================
+   LOGIN SUPPORT
+========================================================= */
+
+function openLogin() {
+
+    closeModal(
+        "signupModal"
+    );
+
+    closeModal(
+        "profileModal"
+    );
+
+
+    if (
+        document.getElementById(
+            "loginModal"
+        )
+    ) {
+
+        openModal(
+            "loginModal"
+        );
+
+        return;
 
     }
+
+
+    saveReturnPage();
+
+
+    window.location.href =
+        "login.php";
+
+}
+
+
+function showLoginRequired() {
+
+    saveReturnPage();
+
+
+    if (
+        document.getElementById(
+            "loginModal"
+        )
+    ) {
+
+        openModal(
+            "loginModal"
+        );
+
+        return;
+
+    }
+
+
+    window.location.href =
+        "login.php";
+
+}
+
+
+/* =========================================================
+   SIGNUP SUPPORT
+========================================================= */
+
+function openSignup() {
+
+    closeModal(
+        "loginModal"
+    );
+
+    closeModal(
+        "profileModal"
+    );
+
+
+    if (
+        document.getElementById(
+            "signupModal"
+        )
+    ) {
+
+        openModal(
+            "signupModal"
+        );
+
+        return;
+
+    }
+
+
+    saveReturnPage();
+
+
+    window.location.href =
+        "signup.php";
+
+}
+
+
+/* =========================================================
+   LOGIN FORM
+========================================================= */
+
+async function login(
+    event
+) {
+
+    event.preventDefault();
+
+
+    const emailElement =
+        document.getElementById(
+            "loginEmail"
+        );
+
+
+    const passwordElement =
+        document.getElementById(
+            "loginPassword"
+        );
+
+
+    if (
+        !emailElement ||
+        !passwordElement
+    ) {
+
+        saveReturnPage();
+
+        window.location.href =
+            "login.php";
+
+        return;
+
+    }
+
+
+    const email =
+        emailElement.value.trim();
+
+
+    const password =
+        passwordElement.value;
+
+
+    if (
+        !email ||
+        !password
+    ) {
+
+        alert(
+            "Please enter your email and password."
+        );
+
+        return;
+
+    }
+
+
+    try {
+
+        const formData =
+            new FormData();
+
+
+        formData.append(
+            "email",
+            email
+        );
+
+
+        formData.append(
+            "password",
+            password
+        );
+
+
+        const response =
+            await fetch(
+                "php/login_process.php",
+                {
+                    method:
+                        "POST",
+
+                    body:
+                        formData,
+
+                    credentials:
+                        "same-origin",
+
+                    cache:
+                        "no-store",
+
+                    headers:
+                        {
+                            "Accept":
+                                "application/json"
+                        }
+                }
+            );
+
+
+        const text =
+            await response.text();
+
+
+        let data;
+
+
+        try {
+
+            data =
+                JSON.parse(
+                    text
+                );
+
+        } catch (error) {
+
+            console.error(
+                "Login response:",
+                text
+            );
+
+            alert(
+                "The server returned an unexpected response. Please check PHP."
+            );
+
+            return;
+
+        }
+
+
+        if (
+            !data.success
+        ) {
+
+            alert(
+                data.message ||
+                "Login failed."
+            );
+
+            return;
+
+        }
+
+
+        closeModal(
+            "loginModal"
+        );
+
+
+        /*
+         * ADMIN
+         */
+        if (
+            data.user &&
+            data.user.role ===
+                "admin"
+        ) {
+
+            clearReturnPage();
+
+
+            window.location.href =
+                "admin/index.php";
+
+
+            return;
+
+        }
+
+
+        /*
+         * CUSTOMER
+         */
+        const returnPage =
+            getReturnPage();
+
+
+        clearReturnPage();
+
+
+        window.location.href =
+            returnPage;
+
+
+    } catch (error) {
+
+        console.error(
+            "Login error:",
+            error
+        );
+
+
+        alert(
+            "Unable to connect to the server."
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   SIGNUP FORM
+========================================================= */
+
+async function signup(
+    event
+) {
+
+    event.preventDefault();
+
+
+    const nameElement =
+        document.getElementById(
+            "signupName"
+        );
+
+
+    const emailElement =
+        document.getElementById(
+            "signupEmail"
+        );
+
+
+    const passwordElement =
+        document.getElementById(
+            "signupPassword"
+        );
+
+
+    const confirmElement =
+        document.getElementById(
+            "signupConfirm"
+        );
+
+
+    if (
+        !nameElement ||
+        !emailElement ||
+        !passwordElement ||
+        !confirmElement
+    ) {
+
+        saveReturnPage();
+
+        window.location.href =
+            "signup.php";
+
+        return;
+
+    }
+
+
+    const fullName =
+        nameElement.value.trim();
+
+
+    const email =
+        emailElement.value.trim();
+
+
+    const password =
+        passwordElement.value;
+
+
+    const confirmPassword =
+        confirmElement.value;
+
+
+    if (
+        !fullName ||
+        !email ||
+        !password ||
+        !confirmPassword
+    ) {
+
+        alert(
+            "Please complete all fields."
+        );
+
+        return;
+
+    }
+
+
+    if (
+        password !==
+        confirmPassword
+    ) {
+
+        alert(
+            "Passwords do not match."
+        );
+
+        return;
+
+    }
+
+
+    if (
+        password.length < 6
+    ) {
+
+        alert(
+            "Password must be at least 6 characters."
+        );
+
+        return;
+
+    }
+
+
+    try {
+
+        const formData =
+            new FormData();
+
+
+        formData.append(
+            "full_name",
+            fullName
+        );
+
+
+        formData.append(
+            "email",
+            email
+        );
+
+
+        formData.append(
+            "password",
+            password
+        );
+
+
+        const response =
+            await fetch(
+                "php/signup_process.php",
+                {
+                    method:
+                        "POST",
+
+                    body:
+                        formData,
+
+                    credentials:
+                        "same-origin",
+
+                    cache:
+                        "no-store",
+
+                    headers:
+                        {
+                            "Accept":
+                                "application/json"
+                        }
+                }
+            );
+
+
+        const text =
+            await response.text();
+
+
+        let data;
+
+
+        try {
+
+            data =
+                JSON.parse(
+                    text
+                );
+
+        } catch (error) {
+
+            console.error(
+                "Signup response:",
+                text
+            );
+
+            alert(
+                "The server returned an unexpected response."
+            );
+
+            return;
+
+        }
+
+
+        if (
+            !data.success
+        ) {
+
+            alert(
+                data.message ||
+                "Unable to create account."
+            );
+
+            return;
+
+        }
+
+
+        alert(
+            data.message ||
+            "Account created successfully."
+        );
+
+
+        clearReturnPage();
+
+
+        window.location.href =
+            "login.php";
+
+
+    } catch (error) {
+
+        console.error(
+            "Signup error:",
+            error
+        );
+
+
+        alert(
+            "Unable to connect to the server."
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   PROFILE FALLBACK
+
+   IMPORTANT:
+   This function does NOT create a profile icon.
+   It only supports an old page if it calls
+   openProfile().
+========================================================= */
+
+function openProfile() {
+
+    if (
+        document.getElementById(
+            "profileModal"
+        )
+    ) {
+
+        openModal(
+            "profileModal"
+        );
+
+        return;
+
+    }
+
+
+    saveReturnPage();
+
+
+    window.location.href =
+        "orders.php";
 
 }
 
@@ -2210,27 +2404,35 @@ function showAllProducts() {
    NEWSLETTER
 ========================================================= */
 
-function subscribe(event) {
+function subscribe(
+    event
+) {
 
     event.preventDefault();
 
 
-    const emailInput =
+    const input =
         document.getElementById(
             "newsletterEmail"
         );
 
 
-    if (!emailInput) {
+    if (
+        !input
+    ) {
+
         return;
+
     }
 
 
     const email =
-        emailInput.value.trim();
+        input.value.trim();
 
 
-    if (!email) {
+    if (
+        !email
+    ) {
 
         alert(
             "Please enter your email address."
@@ -2246,7 +2448,7 @@ function subscribe(event) {
     );
 
 
-    emailInput.value =
+    input.value =
         "";
 
 }
@@ -2256,7 +2458,9 @@ function subscribe(event) {
    CONTACT FORM
 ========================================================= */
 
-function sendMessage(event) {
+function sendMessage(
+    event
+) {
 
     event.preventDefault();
 
@@ -2282,20 +2486,8 @@ document.addEventListener(
             );
 
 
-        if (!link) {
-            return;
-        }
-
-
-        const targetId =
-            link.getAttribute(
-                "href"
-            );
-
-
         if (
-            !targetId ||
-            targetId === "#"
+            !link
         ) {
 
             return;
@@ -2303,24 +2495,97 @@ document.addEventListener(
         }
 
 
-        const target =
-            document.querySelector(
-                targetId
+        const href =
+            link.getAttribute(
+                "href"
             );
 
 
-        if (!target) {
+        if (
+            !href ||
+            href === "#"
+        ) {
+
             return;
+
+        }
+
+
+        let target =
+            null;
+
+
+        try {
+
+            target =
+                document.querySelector(
+                    href
+                );
+
+        } catch (error) {
+
+            return;
+
+        }
+
+
+        if (
+            !target
+        ) {
+
+            return;
+
         }
 
 
         event.preventDefault();
 
 
-        target.scrollIntoView({
-            behavior: "smooth"
-        });
+        target.scrollIntoView(
+            {
+                behavior:
+                    "smooth",
+
+                block:
+                    "start"
+            }
+        );
 
     }
 );
 
+
+/* =========================================================
+   INITIALIZATION
+========================================================= */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    async function () {
+
+        setupModalClosing();
+
+
+        /*
+         * Only use the database cart on pages
+         * that actually contain a cart counter
+         * or products.
+         */
+        if (
+            document.getElementById(
+                "cartCount"
+            ) ||
+            document.querySelector(
+                ".product-card"
+            )
+        ) {
+
+            await loadCart();
+
+        }
+
+
+        updateShopStockDisplays();
+
+    }
+);

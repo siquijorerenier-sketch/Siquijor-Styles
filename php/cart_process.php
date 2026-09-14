@@ -1,987 +1,1532 @@
 <?php
 
-session_start();
+/*
+ * SIQUIJOR STYLES
+ * php/cart_process.php
+ *
+ * SINGLE DATABASE CART API
+ *
+ * Supported actions:
+ *   get
+ *   add
+ *   update
+ *   remove
+ *   clear
+ */
 
-require_once "database.php";
 
-header("Content-Type: application/json; charset=UTF-8");
+/* =========================================================
+   OUTPUT BUFFER
+========================================================= */
+
+ob_start();
 
 
-/* ==================================================
-   RESPONSE HELPER
-================================================== */
+/* =========================================================
+   ERROR SETTINGS
+========================================================= */
 
-function sendResponse(
-    bool $success,
-    string $message,
-    array $data = []
-): void {
+ini_set(
+    "display_errors",
+    "0"
+);
 
-    echo json_encode([
-        "success" => $success,
-        "message" => $message,
-        "data" => $data
-    ]);
+ini_set(
+    "display_startup_errors",
+    "0"
+);
+
+error_reporting(
+    E_ALL
+);
+
+
+/* =========================================================
+   LOAD SHARED SESSION + DATABASE
+========================================================= */
+
+try {
+
+    require_once __DIR__ . "/session.php";
+
+    require_once __DIR__ . "/database.php";
+
+} catch (Throwable $e) {
+
+    while (
+        ob_get_level() > 0
+    ) {
+
+        ob_end_clean();
+
+    }
+
+    header(
+        "Content-Type: application/json; charset=UTF-8"
+    );
+
+    echo json_encode(
+        [
+            "success" => false,
+            "message" => "Unable to load the cart system.",
+            "data" => []
+        ],
+        JSON_UNESCAPED_UNICODE
+    );
 
     exit;
-}
-
-
-/* ==================================================
-   DATABASE CHECK
-================================================== */
-
-if (!isset($conn) || !$conn) {
-
-    sendResponse(
-        false,
-        "Database connection failed."
-    );
 
 }
 
 
-/* ==================================================
-   LOGIN CHECK
-================================================== */
+/* =========================================================
+   RESPONSE HEADERS
+========================================================= */
 
-if (
-    empty($_SESSION["logged_in"]) ||
-    empty($_SESSION["user_id"])
+header(
+    "Content-Type: application/json; charset=UTF-8"
+);
+
+header(
+    "Cache-Control: no-store, no-cache, must-revalidate, max-age=0"
+);
+
+header(
+    "Pragma: no-cache"
+);
+
+
+/* =========================================================
+   JSON RESPONSE FUNCTION
+========================================================= */
+
+function cart_json(
+    $success,
+    $message = "",
+    $data = []
 ) {
 
-    sendResponse(
-        false,
-        "Please log in first."
-    );
+    while (
+        ob_get_level() > 0
+    ) {
 
-}
-
-
-$user_id = (int) $_SESSION["user_id"];
-
-
-/* ==================================================
-   REQUEST METHOD
-================================================== */
-
-if (
-    $_SERVER["REQUEST_METHOD"] !== "POST"
-) {
-
-    sendResponse(
-        false,
-        "Invalid request."
-    );
-
-}
-
-
-/* ==================================================
-   REQUEST VALUES
-================================================== */
-
-$action =
-    trim($_POST["action"] ?? "");
-
-$product_id =
-    (int) ($_POST["product_id"] ?? 0);
-
-$quantity =
-    (int) ($_POST["quantity"] ?? 1);
-
-
-/* ==================================================
-   GET CART
-================================================== */
-
-if ($action === "get") {
-
-    /*
-     * IMPORTANT:
-     * products.id is the primary key.
-     * cart_items.product_id points to products.id.
-     */
-
-    $stmt = $conn->prepare(
-        "SELECT
-            ci.id,
-            ci.product_id,
-            ci.quantity,
-            p.product_name,
-            p.price,
-            p.image,
-            p.stock
-         FROM cart_items ci
-         INNER JOIN cart c
-            ON ci.cart_id = c.id
-         INNER JOIN products p
-            ON ci.product_id = p.id
-         WHERE c.user_id = ?
-         ORDER BY ci.id DESC"
-    );
-
-
-    if (!$stmt) {
-
-        sendResponse(
-            false,
-            "Unable to load cart: " . $conn->error
-        );
+        ob_end_clean();
 
     }
 
-
-    $stmt->bind_param(
-        "i",
-        $user_id
+    header(
+        "Content-Type: application/json; charset=UTF-8"
     );
 
-
-    if (!$stmt->execute()) {
-
-        $error =
-            $stmt->error;
-
-        $stmt->close();
-
-        sendResponse(
-            false,
-            "Unable to load cart: " . $error
-        );
-
-    }
-
-
-    $result =
-        $stmt->get_result();
-
-
-    $items = [];
-
-
-    if ($result) {
-
-        while (
-            $row =
-            $result->fetch_assoc()
-        ) {
-
-            $items[] = [
-
-                "id" =>
-                    (int) $row["id"],
-
-                "product_id" =>
-                    (int) $row["product_id"],
-
-                "productId" =>
-                    (int) $row["product_id"],
-
-                "name" =>
-                    $row["product_name"],
-
-                "product_name" =>
-                    $row["product_name"],
-
-                "price" =>
-                    (float) $row["price"],
-
-                "image" =>
-                    $row["image"],
-
-                "quantity" =>
-                    (int) $row["quantity"],
-
-                "stock" =>
-                    (int) $row["stock"]
-
-            ];
-
-        }
-
-    }
-
-
-    $stmt->close();
-
-
-    sendResponse(
-        true,
-        "Cart loaded.",
+    echo json_encode(
         [
-            "cart" => $items
-        ]
+            "success" =>
+                (bool) $success,
+
+            "message" =>
+                (string) $message,
+
+            "data" =>
+                is_array($data)
+                    ? $data
+                    : []
+        ],
+        JSON_UNESCAPED_UNICODE |
+        JSON_UNESCAPED_SLASHES
     );
+
+    exit;
 
 }
 
 
-/* ==================================================
-   ADD TO CART
-================================================== */
+/* =========================================================
+   CONVERT PHP ERRORS INTO EXCEPTIONS
+========================================================= */
 
-if ($action === "add") {
+set_error_handler(
+    function (
+        $severity,
+        $message,
+        $file,
+        $line
+    ) {
+
+        throw new ErrorException(
+            $message,
+            0,
+            $severity,
+            $file,
+            $line
+        );
+
+    }
+);
 
 
-    if ($product_id <= 0) {
+/* =========================================================
+   MAIN CART LOGIC
+========================================================= */
 
-        sendResponse(
+try {
+
+
+    /* =====================================================
+       REQUEST METHOD
+    ===================================================== */
+
+    if (
+        ($_SERVER["REQUEST_METHOD"] ?? "") !== "POST"
+    ) {
+
+        cart_json(
             false,
-            "Invalid product."
+            "Invalid request method."
         );
 
     }
 
 
-    if ($quantity <= 0) {
+    /* =====================================================
+       LOGIN CHECK
+    ===================================================== */
 
-        sendResponse(
+    if (
+        empty($_SESSION["logged_in"]) ||
+        empty($_SESSION["user_id"])
+    ) {
+
+        cart_json(
             false,
-            "Invalid quantity."
+            "Please log in first."
         );
 
     }
 
 
-    /* ----------------------------------------------
-       FIND PRODUCT
-    ---------------------------------------------- */
-
-    $stmt = $conn->prepare(
-        "SELECT
-            id,
-            product_name,
-            price,
-            stock,
-            image
-         FROM products
-         WHERE id = ?
-         LIMIT 1"
-    );
-
-
-    if (!$stmt) {
-
-        sendResponse(
-            false,
-            "Unable to find product: " . $conn->error
-        );
-
-    }
-
-
-    $stmt->bind_param(
-        "i",
-        $product_id
-    );
-
-
-    if (!$stmt->execute()) {
-
-        $error =
-            $stmt->error;
-
-        $stmt->close();
-
-        sendResponse(
-            false,
-            "Unable to find product: " . $error
-        );
-
-    }
-
-
-    $result =
-        $stmt->get_result();
+    $user_id =
+        (int) $_SESSION["user_id"];
 
 
     if (
-        !$result ||
-        $result->num_rows === 0
+        $user_id <= 0
     ) {
 
-        $stmt->close();
-
-        sendResponse(
+        cart_json(
             false,
-            "Product not found."
+            "Invalid user session."
         );
 
     }
 
 
-    $product =
-        $result->fetch_assoc();
+    /* =====================================================
+       DATABASE CHECK
+    ===================================================== */
 
+    if (
+        !isset($conn) ||
+        !($conn instanceof mysqli)
+    ) {
 
-    $stmt->close();
-
-
-    $stock =
-        (int) $product["stock"];
-
-
-    if ($stock <= 0) {
-
-        sendResponse(
+        cart_json(
             false,
-            $product["product_name"] .
-            " is out of stock."
+            "Database connection is unavailable."
         );
 
     }
 
 
-    if ($quantity > $stock) {
+    if (
+        $conn->connect_errno
+    ) {
 
-        sendResponse(
+        cart_json(
             false,
-            "Only " .
-            $stock .
-            " unit(s) available."
+            "Database connection failed."
         );
 
     }
 
 
-    /* ----------------------------------------------
-       FIND USER CART
-    ---------------------------------------------- */
-
-    $stmt = $conn->prepare(
-        "SELECT
-            id
-         FROM cart
-         WHERE user_id = ?
-         LIMIT 1"
+    $conn->set_charset(
+        "utf8mb4"
     );
 
 
-    if (!$stmt) {
+    /* =====================================================
+       ACTION
+    ===================================================== */
 
-        sendResponse(
+    $action =
+        trim(
+            (string)
+            (
+                $_POST["action"]
+                ?? ""
+            )
+        );
+
+
+    if (
+        $action === ""
+    ) {
+
+        cart_json(
             false,
-            "Unable to find cart: " . $conn->error
+            "No cart action was provided."
         );
 
     }
 
 
-    $stmt->bind_param(
+    /* =====================================================
+       FIND USER CART
+    ===================================================== */
+
+    $cart_id =
+        0;
+
+
+    $cart_stmt =
+        $conn->prepare(
+            "
+            SELECT
+                id
+
+            FROM cart
+
+            WHERE user_id = ?
+
+            ORDER BY id ASC
+
+            LIMIT 1
+            "
+        );
+
+
+    if (
+        !$cart_stmt
+    ) {
+
+        throw new RuntimeException(
+            "Unable to prepare cart lookup: " .
+            $conn->error
+        );
+
+    }
+
+
+    $cart_stmt->bind_param(
         "i",
         $user_id
     );
 
 
-    if (!$stmt->execute()) {
+    if (
+        !$cart_stmt->execute()
+    ) {
 
         $error =
-            $stmt->error;
+            $cart_stmt->error;
 
-        $stmt->close();
+        $cart_stmt->close();
 
-        sendResponse(
-            false,
-            "Unable to find cart: " . $error
+        throw new RuntimeException(
+            "Unable to load cart: " .
+            $error
         );
 
     }
 
 
-    $result =
-        $stmt->get_result();
+    $cart_result =
+        $cart_stmt->get_result();
 
 
     if (
-        $result &&
-        $result->num_rows > 0
+        $cart_result &&
+        $cart_result->num_rows > 0
     ) {
 
-        $cart =
-            $result->fetch_assoc();
+        $cart_row =
+            $cart_result->fetch_assoc();
 
         $cart_id =
-            (int) $cart["id"];
-
-        $stmt->close();
+            (int) $cart_row["id"];
 
     }
 
-    else {
 
-        $stmt->close();
+    $cart_stmt->close();
 
 
-        $create =
+    /* =====================================================
+       CREATE CART IF USER DOES NOT HAVE ONE
+    ===================================================== */
+
+    if (
+        $cart_id <= 0
+    ) {
+
+        $create_cart_stmt =
             $conn->prepare(
-                "INSERT INTO cart
-                 (user_id)
-                 VALUES (?)"
+                "
+                INSERT INTO cart
+                (
+                    user_id
+                )
+
+                VALUES
+                (
+                    ?
+                )
+                "
             );
 
 
-        if (!$create) {
+        if (
+            !$create_cart_stmt
+        ) {
 
-            sendResponse(
-                false,
-                "Unable to create cart: " . $conn->error
+            throw new RuntimeException(
+                "Unable to prepare cart creation: " .
+                $conn->error
             );
 
         }
 
 
-        $create->bind_param(
+        $create_cart_stmt->bind_param(
             "i",
             $user_id
         );
 
 
-        if (!$create->execute()) {
+        if (
+            !$create_cart_stmt->execute()
+        ) {
 
             $error =
-                $create->error;
+                $create_cart_stmt->error;
 
-            $create->close();
+            $create_cart_stmt->close();
 
-            sendResponse(
-                false,
-                "Unable to create cart: " . $error
+            throw new RuntimeException(
+                "Unable to create cart: " .
+                $error
             );
 
         }
 
 
         $cart_id =
-            (int) $conn->insert_id;
+            (int)
+            $create_cart_stmt->insert_id;
 
 
-        $create->close();
-
-    }
-
-
-    /* ----------------------------------------------
-       CHECK EXISTING CART ITEM
-    ---------------------------------------------- */
-
-    $stmt = $conn->prepare(
-        "SELECT
-            id,
-            quantity
-         FROM cart_items
-         WHERE cart_id = ?
-           AND product_id = ?
-         LIMIT 1"
-    );
-
-
-    if (!$stmt) {
-
-        sendResponse(
-            false,
-            "Unable to check cart item: " .
-            $conn->error
-        );
+        $create_cart_stmt->close();
 
     }
 
 
-    $stmt->bind_param(
-        "ii",
-        $cart_id,
-        $product_id
-    );
-
-
-    if (!$stmt->execute()) {
-
-        $error =
-            $stmt->error;
-
-        $stmt->close();
-
-        sendResponse(
-            false,
-            "Unable to check cart item: " .
-            $error
-        );
-
-    }
-
-
-    $result =
-        $stmt->get_result();
-
+    /* =====================================================
+       GET CART
+    ===================================================== */
 
     if (
-        $result &&
-        $result->num_rows > 0
+        $action === "get"
     ) {
 
-        $existing =
-            $result->fetch_assoc();
+        $items =
+            [];
 
 
-        $item_id =
-            (int) $existing["id"];
+        $items_stmt =
+            $conn->prepare(
+                "
+                SELECT
 
+                    ci.id,
 
-        $old_quantity =
-            (int) $existing["quantity"];
+                    ci.product_id,
 
+                    ci.quantity,
 
-        $new_quantity =
-            $old_quantity +
-            $quantity;
+                    p.product_name,
 
+                    p.description,
 
-        $stmt->close();
+                    p.price,
+
+                    p.image,
+
+                    p.stock
+
+                FROM cart_items ci
+
+                INNER JOIN products p
+
+                    ON p.id = ci.product_id
+
+                WHERE ci.cart_id = ?
+
+                ORDER BY ci.id ASC
+                "
+            );
 
 
         if (
-            $new_quantity >
-            $stock
+            !$items_stmt
         ) {
 
-            sendResponse(
+            throw new RuntimeException(
+                "Unable to prepare cart items query: " .
+                $conn->error
+            );
+
+        }
+
+
+        $items_stmt->bind_param(
+            "i",
+            $cart_id
+        );
+
+
+        if (
+            !$items_stmt->execute()
+        ) {
+
+            $error =
+                $items_stmt->error;
+
+            $items_stmt->close();
+
+            throw new RuntimeException(
+                "Unable to load cart items: " .
+                $error
+            );
+
+        }
+
+
+        $items_result =
+            $items_stmt->get_result();
+
+
+        if (
+            $items_result
+        ) {
+
+            while (
+                $row =
+                $items_result->fetch_assoc()
+            ) {
+
+                $items[] = [
+
+                    "id" =>
+                        (int)
+                        $row["id"],
+
+                    "product_id" =>
+                        (int)
+                        $row["product_id"],
+
+                    "quantity" =>
+                        (int)
+                        $row["quantity"],
+
+                    "product_name" =>
+                        (string)
+                        $row["product_name"],
+
+                    "description" =>
+                        (string)
+                        (
+                            $row["description"]
+                            ?? ""
+                        ),
+
+                    "price" =>
+                        (float)
+                        $row["price"],
+
+                    "image" =>
+                        (string)
+                        (
+                            $row["image"]
+                            ?? ""
+                        ),
+
+                    "stock" =>
+                        (int)
+                        $row["stock"]
+
+                ];
+
+            }
+
+        }
+
+
+        $items_stmt->close();
+
+
+        $total_items =
+            0;
+
+
+        $total_amount =
+            0.00;
+
+
+        foreach (
+            $items as $item
+        ) {
+
+            $quantity =
+                (int)
+                $item["quantity"];
+
+
+            $price =
+                (float)
+                $item["price"];
+
+
+            $total_items +=
+                $quantity;
+
+
+            $total_amount +=
+                $price *
+                $quantity;
+
+        }
+
+
+        cart_json(
+            true,
+            "Cart loaded successfully.",
+            [
+
+                "cart_id" =>
+                    $cart_id,
+
+                "cart" =>
+                    $items,
+
+                "items" =>
+                    $items,
+
+                "total_items" =>
+                    $total_items,
+
+                "total_amount" =>
+                    round(
+                        $total_amount,
+                        2
+                    )
+
+            ]
+        );
+
+    }
+
+
+    /* =====================================================
+       ADD TO CART
+    ===================================================== */
+
+    if (
+        $action === "add"
+    ) {
+
+        $product_id =
+            (int)
+            (
+                $_POST["product_id"]
+                ?? 0
+            );
+
+
+        $quantity =
+            (int)
+            (
+                $_POST["quantity"]
+                ?? 1
+            );
+
+
+        if (
+            $product_id <= 0
+        ) {
+
+            cart_json(
+                false,
+                "Invalid product."
+            );
+
+        }
+
+
+        if (
+            $quantity <= 0
+        ) {
+
+            cart_json(
+                false,
+                "Invalid quantity."
+            );
+
+        }
+
+
+        /* -------------------------------------------------
+           PRODUCT
+        ------------------------------------------------- */
+
+        $product_stmt =
+            $conn->prepare(
+                "
+                SELECT
+
+                    id,
+
+                    product_name,
+
+                    price,
+
+                    stock
+
+                FROM products
+
+                WHERE id = ?
+
+                LIMIT 1
+                "
+            );
+
+
+        if (
+            !$product_stmt
+        ) {
+
+            throw new RuntimeException(
+                "Unable to prepare product lookup: " .
+                $conn->error
+            );
+
+        }
+
+
+        $product_stmt->bind_param(
+            "i",
+            $product_id
+        );
+
+
+        if (
+            !$product_stmt->execute()
+        ) {
+
+            $error =
+                $product_stmt->error;
+
+            $product_stmt->close();
+
+            throw new RuntimeException(
+                "Unable to check product: " .
+                $error
+            );
+
+        }
+
+
+        $product_result =
+            $product_stmt->get_result();
+
+
+        if (
+            !$product_result ||
+            $product_result->num_rows === 0
+        ) {
+
+            $product_stmt->close();
+
+            cart_json(
+                false,
+                "Product not found."
+            );
+
+        }
+
+
+        $product =
+            $product_result->fetch_assoc();
+
+
+        $product_stmt->close();
+
+
+        $stock =
+            (int)
+            $product["stock"];
+
+
+        if (
+            $stock <= 0
+        ) {
+
+            cart_json(
+                false,
+                "This product is out of stock."
+            );
+
+        }
+
+
+        /* -------------------------------------------------
+           EXISTING CART ITEM
+        ------------------------------------------------- */
+
+        $existing_stmt =
+            $conn->prepare(
+                "
+                SELECT
+
+                    id,
+
+                    quantity
+
+                FROM cart_items
+
+                WHERE cart_id = ?
+
+                  AND product_id = ?
+
+                LIMIT 1
+                "
+            );
+
+
+        if (
+            !$existing_stmt
+        ) {
+
+            throw new RuntimeException(
+                "Unable to prepare cart item lookup: " .
+                $conn->error
+            );
+
+        }
+
+
+        $existing_stmt->bind_param(
+            "ii",
+            $cart_id,
+            $product_id
+        );
+
+
+        if (
+            !$existing_stmt->execute()
+        ) {
+
+            $error =
+                $existing_stmt->error;
+
+            $existing_stmt->close();
+
+            throw new RuntimeException(
+                "Unable to check cart item: " .
+                $error
+            );
+
+        }
+
+
+        $existing_result =
+            $existing_stmt->get_result();
+
+
+        $existing_id =
+            0;
+
+
+        $existing_quantity =
+            0;
+
+
+        if (
+            $existing_result &&
+            $existing_result->num_rows > 0
+        ) {
+
+            $existing =
+                $existing_result->fetch_assoc();
+
+
+            $existing_id =
+                (int)
+                $existing["id"];
+
+
+            $existing_quantity =
+                (int)
+                $existing["quantity"];
+
+        }
+
+
+        $existing_stmt->close();
+
+
+        $new_quantity =
+            $existing_quantity +
+            $quantity;
+
+
+        if (
+            $new_quantity > $stock
+        ) {
+
+            cart_json(
                 false,
                 "Only " .
                 $stock .
-                " unit(s) available."
+                " unit(s) are available."
             );
 
         }
 
 
-        $update =
-            $conn->prepare(
-                "UPDATE cart_items
-                 SET quantity = ?
-                 WHERE id = ?"
+        /* -------------------------------------------------
+           UPDATE EXISTING ITEM
+        ------------------------------------------------- */
+
+        if (
+            $existing_id > 0
+        ) {
+
+            $update_stmt =
+                $conn->prepare(
+                    "
+                    UPDATE cart_items
+
+                    SET quantity = ?
+
+                    WHERE id = ?
+
+                      AND cart_id = ?
+                    "
+                );
+
+
+            if (
+                !$update_stmt
+            ) {
+
+                throw new RuntimeException(
+                    "Unable to prepare cart update: " .
+                    $conn->error
+                );
+
+            }
+
+
+            $update_stmt->bind_param(
+                "iii",
+                $new_quantity,
+                $existing_id,
+                $cart_id
             );
 
 
-        if (!$update) {
+            if (
+                !$update_stmt->execute()
+            ) {
 
-            sendResponse(
+                $error =
+                    $update_stmt->error;
+
+                $update_stmt->close();
+
+                throw new RuntimeException(
+                    "Unable to update cart: " .
+                    $error
+                );
+
+            }
+
+
+            $update_stmt->close();
+
+
+        }
+
+        /* -------------------------------------------------
+           INSERT NEW ITEM
+        ------------------------------------------------- */
+
+        else {
+
+            $insert_stmt =
+                $conn->prepare(
+                    "
+                    INSERT INTO cart_items
+                    (
+                        cart_id,
+                        product_id,
+                        quantity
+                    )
+
+                    VALUES
+                    (
+                        ?,
+                        ?,
+                        ?
+                    )
+                    "
+                );
+
+
+            if (
+                !$insert_stmt
+            ) {
+
+                throw new RuntimeException(
+                    "Unable to prepare cart insertion: " .
+                    $conn->error
+                );
+
+            }
+
+
+            $insert_stmt->bind_param(
+                "iii",
+                $cart_id,
+                $product_id,
+                $quantity
+            );
+
+
+            if (
+                !$insert_stmt->execute()
+            ) {
+
+                $error =
+                    $insert_stmt->error;
+
+                $insert_stmt->close();
+
+                throw new RuntimeException(
+                    "Unable to add item to cart: " .
+                    $error
+                );
+
+            }
+
+
+            $insert_stmt->close();
+
+        }
+
+
+        cart_json(
+            true,
+            $product["product_name"] .
+            " has been added to your cart.",
+            [
+
+                "cart_id" =>
+                    $cart_id,
+
+                "product_id" =>
+                    $product_id
+
+            ]
+        );
+
+    }
+
+
+    /* =====================================================
+       UPDATE CART QUANTITY
+    ===================================================== */
+
+    if (
+        $action === "update"
+    ) {
+
+        $product_id =
+            (int)
+            (
+                $_POST["product_id"]
+                ?? 0
+            );
+
+
+        $quantity =
+            (int)
+            (
+                $_POST["quantity"]
+                ?? 0
+            );
+
+
+        if (
+            $product_id <= 0
+        ) {
+
+            cart_json(
                 false,
-                "Unable to update cart: " .
+                "Invalid product."
+            );
+
+        }
+
+
+        /* -------------------------------------------------
+           QUANTITY ZERO = REMOVE
+        ------------------------------------------------- */
+
+        if (
+            $quantity <= 0
+        ) {
+
+            $remove_stmt =
+                $conn->prepare(
+                    "
+                    DELETE FROM cart_items
+
+                    WHERE cart_id = ?
+
+                      AND product_id = ?
+                    "
+                );
+
+
+            if (
+                !$remove_stmt
+            ) {
+
+                throw new RuntimeException(
+                    "Unable to prepare item removal: " .
+                    $conn->error
+                );
+
+            }
+
+
+            $remove_stmt->bind_param(
+                "ii",
+                $cart_id,
+                $product_id
+            );
+
+
+            if (
+                !$remove_stmt->execute()
+            ) {
+
+                $error =
+                    $remove_stmt->error;
+
+                $remove_stmt->close();
+
+                throw new RuntimeException(
+                    "Unable to remove item: " .
+                    $error
+                );
+
+            }
+
+
+            $remove_stmt->close();
+
+
+            cart_json(
+                true,
+                "Item removed from your cart."
+            );
+
+        }
+
+
+        /* -------------------------------------------------
+           STOCK CHECK
+        ------------------------------------------------- */
+
+        $stock_stmt =
+            $conn->prepare(
+                "
+                SELECT
+                    stock
+
+                FROM products
+
+                WHERE id = ?
+
+                LIMIT 1
+                "
+            );
+
+
+        if (
+            !$stock_stmt
+        ) {
+
+            throw new RuntimeException(
+                "Unable to prepare stock lookup: " .
                 $conn->error
             );
 
         }
 
 
-        $update->bind_param(
-            "ii",
-            $new_quantity,
-            $item_id
+        $stock_stmt->bind_param(
+            "i",
+            $product_id
         );
 
 
-        if (!$update->execute()) {
+        if (
+            !$stock_stmt->execute()
+        ) {
 
             $error =
-                $update->error;
+                $stock_stmt->error;
 
-            $update->close();
+            $stock_stmt->close();
 
-            sendResponse(
-                false,
-                "Unable to update cart: " .
+            throw new RuntimeException(
+                "Unable to check stock: " .
                 $error
             );
 
         }
 
 
-        $update->close();
-
-    }
-
-    else {
-
-        $stmt->close();
+        $stock_result =
+            $stock_stmt->get_result();
 
 
-        $insert =
+        if (
+            !$stock_result ||
+            $stock_result->num_rows === 0
+        ) {
+
+            $stock_stmt->close();
+
+            cart_json(
+                false,
+                "Product not found."
+            );
+
+        }
+
+
+        $stock_row =
+            $stock_result->fetch_assoc();
+
+
+        $stock_stmt->close();
+
+
+        $stock =
+            (int)
+            $stock_row["stock"];
+
+
+        if (
+            $quantity > $stock
+        ) {
+
+            cart_json(
+                false,
+                "Only " .
+                $stock .
+                " unit(s) are available."
+            );
+
+        }
+
+
+        /* -------------------------------------------------
+           UPDATE
+        ------------------------------------------------- */
+
+        $update_stmt =
             $conn->prepare(
-                "INSERT INTO cart_items
-                 (
-                    cart_id,
-                    product_id,
-                    quantity
-                 )
-                 VALUES
-                 (
-                    ?,
-                    ?,
-                    ?
-                 )"
+                "
+                UPDATE cart_items
+
+                SET quantity = ?
+
+                WHERE cart_id = ?
+
+                  AND product_id = ?
+                "
             );
 
 
-        if (!$insert) {
+        if (
+            !$update_stmt
+        ) {
 
-            sendResponse(
-                false,
-                "Unable to add item to cart: " .
+            throw new RuntimeException(
+                "Unable to prepare quantity update: " .
                 $conn->error
             );
 
         }
 
 
-        $insert->bind_param(
+        $update_stmt->bind_param(
             "iii",
+            $quantity,
             $cart_id,
-            $product_id,
-            $quantity
+            $product_id
         );
 
 
-        if (!$insert->execute()) {
+        if (
+            !$update_stmt->execute()
+        ) {
 
             $error =
-                $insert->error;
+                $update_stmt->error;
 
-            $insert->close();
+            $update_stmt->close();
 
-            sendResponse(
-                false,
-                "Unable to add item to cart: " .
+            throw new RuntimeException(
+                "Unable to update quantity: " .
                 $error
             );
 
         }
 
 
-        $insert->close();
+        if (
+            $update_stmt->affected_rows === 0
+        ) {
+
+            $update_stmt->close();
+
+            cart_json(
+                false,
+                "Cart item not found."
+            );
+
+        }
+
+
+        $update_stmt->close();
+
+
+        cart_json(
+            true,
+            "Cart quantity updated."
+        );
 
     }
 
 
-    sendResponse(
-        true,
-        $product["product_name"] .
-        " has been added to your cart."
-    );
-
-}
-
-
-/* ==================================================
-   UPDATE CART
-================================================== */
-
-if ($action === "update") {
-
+    /* =====================================================
+       REMOVE FROM CART
+    ===================================================== */
 
     if (
-        $product_id <= 0 ||
-        $quantity <= 0
+        $action === "remove"
     ) {
 
-        sendResponse(
-            false,
-            "Invalid cart information."
+        $product_id =
+            (int)
+            (
+                $_POST["product_id"]
+                ?? 0
+            );
+
+
+        if (
+            $product_id <= 0
+        ) {
+
+            cart_json(
+                false,
+                "Invalid product."
+            );
+
+        }
+
+
+        $remove_stmt =
+            $conn->prepare(
+                "
+                DELETE FROM cart_items
+
+                WHERE cart_id = ?
+
+                  AND product_id = ?
+                "
+            );
+
+
+        if (
+            !$remove_stmt
+        ) {
+
+            throw new RuntimeException(
+                "Unable to prepare item removal: " .
+                $conn->error
+            );
+
+        }
+
+
+        $remove_stmt->bind_param(
+            "ii",
+            $cart_id,
+            $product_id
+        );
+
+
+        if (
+            !$remove_stmt->execute()
+        ) {
+
+            $error =
+                $remove_stmt->error;
+
+            $remove_stmt->close();
+
+            throw new RuntimeException(
+                "Unable to remove item: " .
+                $error
+            );
+
+        }
+
+
+        if (
+            $remove_stmt->affected_rows === 0
+        ) {
+
+            $remove_stmt->close();
+
+            cart_json(
+                false,
+                "Cart item not found."
+            );
+
+        }
+
+
+        $remove_stmt->close();
+
+
+        cart_json(
+            true,
+            "Item removed from your cart."
         );
 
     }
 
 
-    $stmt = $conn->prepare(
-        "SELECT
-            ci.id,
-            p.product_name,
-            p.stock
-         FROM cart_items ci
-         INNER JOIN cart c
-            ON ci.cart_id = c.id
-         INNER JOIN products p
-            ON ci.product_id = p.id
-         WHERE c.user_id = ?
-           AND ci.product_id = ?
-         LIMIT 1"
-    );
-
-
-    if (!$stmt) {
-
-        sendResponse(
-            false,
-            "Unable to find cart item: " .
-            $conn->error
-        );
-
-    }
-
-
-    $stmt->bind_param(
-        "ii",
-        $user_id,
-        $product_id
-    );
-
-
-    if (!$stmt->execute()) {
-
-        $error =
-            $stmt->error;
-
-        $stmt->close();
-
-        sendResponse(
-            false,
-            "Unable to find cart item: " .
-            $error
-        );
-
-    }
-
-
-    $result =
-        $stmt->get_result();
-
+    /* =====================================================
+       CLEAR CART
+    ===================================================== */
 
     if (
-        !$result ||
-        $result->num_rows === 0
+        $action === "clear"
     ) {
 
-        $stmt->close();
+        $clear_stmt =
+            $conn->prepare(
+                "
+                DELETE FROM cart_items
 
-        sendResponse(
-            false,
-            "Cart item not found."
+                WHERE cart_id = ?
+                "
+            );
+
+
+        if (
+            !$clear_stmt
+        ) {
+
+            throw new RuntimeException(
+                "Unable to prepare cart clear: " .
+                $conn->error
+            );
+
+        }
+
+
+        $clear_stmt->bind_param(
+            "i",
+            $cart_id
+        );
+
+
+        if (
+            !$clear_stmt->execute()
+        ) {
+
+            $error =
+                $clear_stmt->error;
+
+            $clear_stmt->close();
+
+            throw new RuntimeException(
+                "Unable to clear cart: " .
+                $error
+            );
+
+        }
+
+
+        $clear_stmt->close();
+
+
+        cart_json(
+            true,
+            "Your cart has been cleared."
         );
 
     }
 
 
-    $item =
-        $result->fetch_assoc();
+    /* =====================================================
+       UNKNOWN ACTION
+    ===================================================== */
 
-
-    $stmt->close();
-
-
-    $stock =
-        (int) $item["stock"];
-
-
-    if (
-        $quantity >
-        $stock
-    ) {
-
-        sendResponse(
-            false,
-            "Only " .
-            $stock .
-            " unit(s) available."
-        );
-
-    }
-
-
-    $update =
-        $conn->prepare(
-            "UPDATE cart_items ci
-             INNER JOIN cart c
-                ON ci.cart_id = c.id
-             SET ci.quantity = ?
-             WHERE c.user_id = ?
-               AND ci.product_id = ?"
-        );
-
-
-    if (!$update) {
-
-        sendResponse(
-            false,
-            "Unable to update cart: " .
-            $conn->error
-        );
-
-    }
-
-
-    $update->bind_param(
-        "iii",
-        $quantity,
-        $user_id,
-        $product_id
+    cart_json(
+        false,
+        "Unknown cart action."
     );
 
 
-    if (!$update->execute()) {
-
-        $error =
-            $update->error;
-
-        $update->close();
-
-        sendResponse(
-            false,
-            "Unable to update cart: " .
-            $error
-        );
-
-    }
+} catch (Throwable $e) {
 
 
-    $update->close();
+    error_log(
+        "SIQUIJOR STYLES cart_process.php ERROR: " .
+        $e->getMessage() .
+        " in " .
+        $e->getFile() .
+        ":" .
+        $e->getLine()
+    );
 
 
-    sendResponse(
-        true,
-        "Cart updated."
+    cart_json(
+        false,
+        "Cart server error: " .
+        $e->getMessage()
     );
 
 }
-
-
-/* ==================================================
-   REMOVE ITEM
-================================================== */
-
-if ($action === "remove") {
-
-
-    if ($product_id <= 0) {
-
-        sendResponse(
-            false,
-            "Invalid product."
-        );
-
-    }
-
-
-    $stmt = $conn->prepare(
-        "DELETE ci
-         FROM cart_items ci
-         INNER JOIN cart c
-            ON ci.cart_id = c.id
-         WHERE c.user_id = ?
-           AND ci.product_id = ?"
-    );
-
-
-    if (!$stmt) {
-
-        sendResponse(
-            false,
-            "Unable to remove item: " .
-            $conn->error
-        );
-
-    }
-
-
-    $stmt->bind_param(
-        "ii",
-        $user_id,
-        $product_id
-    );
-
-
-    if (!$stmt->execute()) {
-
-        $error =
-            $stmt->error;
-
-        $stmt->close();
-
-        sendResponse(
-            false,
-            "Unable to remove item: " .
-            $error
-        );
-
-    }
-
-
-    $stmt->close();
-
-
-    sendResponse(
-        true,
-        "Item removed from cart."
-    );
-
-}
-
-
-/* ==================================================
-   CLEAR CART
-================================================== */
-
-if ($action === "clear") {
-
-
-    $stmt = $conn->prepare(
-        "DELETE ci
-         FROM cart_items ci
-         INNER JOIN cart c
-            ON ci.cart_id = c.id
-         WHERE c.user_id = ?"
-    );
-
-
-    if (!$stmt) {
-
-        sendResponse(
-            false,
-            "Unable to clear cart: " .
-            $conn->error
-        );
-
-    }
-
-
-    $stmt->bind_param(
-        "i",
-        $user_id
-    );
-
-
-    if (!$stmt->execute()) {
-
-        $error =
-            $stmt->error;
-
-        $stmt->close();
-
-        sendResponse(
-            false,
-            "Unable to clear cart: " .
-            $error
-        );
-
-    }
-
-
-    $stmt->close();
-
-
-    sendResponse(
-        true,
-        "Cart cleared."
-    );
-
-}
-
-
-/* ==================================================
-   INVALID ACTION
-================================================== */
-
-sendResponse(
-    false,
-    "Invalid cart action."
-);
-
-?>

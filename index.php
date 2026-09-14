@@ -1,7 +1,8 @@
 <?php
 
 require_once __DIR__ . "/php/session.php";
-require_once __DIR__ . "/php/database.php";
+
+require_once "php/database.php";
 
 header("Content-Type: text/html; charset=UTF-8");
 
@@ -46,7 +47,6 @@ if ($logged_in) {
 
             $current_user =
                 $user_result->fetch_assoc();
-
         }
 
         $user_stmt->close();
@@ -418,51 +418,15 @@ function e($value)
         <?php endif; ?>
     </nav>
 
-<div class="header-tools">
-
-    <?php if ($logged_in && $current_user): ?>
-
-        <?php if ($_SESSION["role"] === "admin"): ?>
-
-            <a
-                class="login-button"
-                href="http://localhost/Website/admin/index.php">
-                Admin Dashboard
-            </a>
-
+    <div class="header-tools">
+        <?php if ($logged_in && $current_user): ?>
+            <a class="login-button" href="orders.php"><?= e($current_user["full_name"]) ?></a>
+            <a class="signup-button" href="logout.php">Log Out</a>
         <?php else: ?>
-
-            <a
-                class="login-button"
-                href="orders.php">
-                <?= e($current_user["full_name"]) ?>
-            </a>
-
+            <a class="login-button" href="login.php">Log In</a>
+            <a class="signup-button" href="signup.php">Sign Up</a>
         <?php endif; ?>
-
-        <a
-            class="signup-button"
-            href="logout.php">
-            Log Out
-        </a>
-
-    <?php else: ?>
-
-        <a
-            class="login-button"
-            href="login.php">
-            Log In
-        </a>
-
-        <a
-            class="signup-button"
-            href="signup.php">
-            Sign Up
-        </a>
-
-    <?php endif; ?>
-
-</div>
+    </div>
 
 </header>
 
