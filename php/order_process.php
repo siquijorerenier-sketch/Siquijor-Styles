@@ -1,12 +1,11 @@
+```php
 <?php
 
 session_start();
 
 require_once __DIR__ . "/database.php";
 
-header(
-    "Content-Type: application/json; charset=UTF-8"
-);
+header("Content-Type: application/json; charset=UTF-8");
 
 /* =========================================================
    JSON RESPONSE
@@ -17,6 +16,10 @@ function json_response(
     string $message,
     array $extra = []
 ): void {
+
+    http_response_code(
+        $success ? 200 : 400
+    );
 
     echo json_encode(
         array_merge(
@@ -37,7 +40,7 @@ function json_response(
 ========================================================= */
 
 if (
-    $_SERVER["REQUEST_METHOD"] !== "POST"
+    ($_SERVER["REQUEST_METHOD"] ?? "") !== "POST"
 ) {
 
     json_response(
@@ -61,8 +64,7 @@ if (
     );
 }
 
-$user_id =
-    (int) $_SESSION["user_id"];
+$user_id = (int) $_SESSION["user_id"];
 
 /* =========================================================
    DATABASE CHECK
@@ -83,36 +85,29 @@ if (
    GET FORM DATA
 ========================================================= */
 
-$full_name =
-    trim(
-        $_POST["full_name"] ?? ""
-    );
+$full_name = trim(
+    $_POST["full_name"] ?? ""
+);
 
-$email =
-    trim(
-        $_POST["email"] ?? ""
-    );
+$email = trim(
+    $_POST["email"] ?? ""
+);
 
-$phone =
-    trim(
-        $_POST["phone"] ?? ""
-    );
+$phone = trim(
+    $_POST["phone"] ?? ""
+);
 
-$address =
-    trim(
-        $_POST["address"] ?? ""
-    );
+$address = trim(
+    $_POST["address"] ?? ""
+);
 
-$payment_method =
-    trim(
-        $_POST["payment_method"] ??
-        "Cash on Delivery"
-    );
+$payment_method = trim(
+    $_POST["payment_method"] ?? "Cash on Delivery"
+);
 
-$payment_platform =
-    trim(
-        $_POST["payment_platform"] ?? ""
-    );
+$payment_platform = trim(
+    $_POST["payment_platform"] ?? ""
+);
 
 /* =========================================================
    BASIC VALIDATION
@@ -165,6 +160,16 @@ if (
 }
 
 if (
+    strlen($phone) > 30
+) {
+
+    json_response(
+        false,
+        "Your phone number is too long."
+    );
+}
+
+if (
     strlen($address) > 500
 ) {
 
@@ -175,7 +180,7 @@ if (
 }
 
 /* =========================================================
-   PAYMENT VALIDATION
+   PAYMENT METHOD VALIDATION
 ========================================================= */
 
 $allowed_payment_methods = [
@@ -197,6 +202,10 @@ if (
     );
 }
 
+/* =========================================================
+   PAYMENT PLATFORM
+========================================================= */
+
 $allowed_platforms = [
     "GCash",
     "Maya",
@@ -204,6 +213,10 @@ $allowed_platforms = [
     "BPI",
     "UnionBank"
 ];
+
+/*
+ * Only Online Payment needs a platform.
+ */
 
 if (
     $payment_method === "Online Payment"
@@ -223,6 +236,33 @@ if (
         );
     }
 }
+
+/*
+ * COD does not need a payment platform.
+ */
+
+if (
+    $payment_method === "Cash on Delivery"
+) {
+
+    $payment_platform = "";
+}
+
+/* =========================================================
+   PAYMENT STATUS
+========================================================= */
+
+$payment_status = "Pending";
+
+/*
+ * Both COD and Online Payment start as Pending.
+ *
+ * COD:
+ *     Payment is collected when delivered.
+ *
+ * Online:
+ *     Receipt is waiting for admin verification.
+ */
 
 /* =========================================================
    RECEIPT
@@ -244,12 +284,11 @@ if (
         );
     }
 
-    $receipt =
-        $_FILES["payment_receipt"];
+    $receipt = $_FILES["payment_receipt"];
 
     if (
-        $receipt["error"] !==
-        UPLOAD_ERR_OK
+        !isset($receipt["error"]) ||
+        $receipt["error"] !== UPLOAD_ERR_OK
     ) {
 
         json_response(
@@ -259,12 +298,11 @@ if (
     }
 
     /* -----------------------------------------------------
-       SIZE
+       CHECK FILE SIZE
     ----------------------------------------------------- */
 
     if (
-        $receipt["size"] >
-        5 * 1024 * 1024
+        $receipt["size"] > 5 * 1024 * 1024
     ) {
 
         json_response(
@@ -274,38 +312,61 @@ if (
     }
 
     /* -----------------------------------------------------
+       CHECK TEMPORARY FILE
+    ----------------------------------------------------- */
+
+    if (
+        !is_uploaded_file(
+            $receipt["tmp_name"]
+        )
+    ) {
+
+        json_response(
+            false,
+            "Invalid payment receipt upload."
+        );
+    }
+
+    /* -----------------------------------------------------
        MIME TYPE
     ----------------------------------------------------- */
 
     $allowed_mime_types = [
-        "image/jpeg" =>
-            "jpg",
 
-        "image/png" =>
-            "png",
+        "image/jpeg" => "jpg",
 
-        "image/webp" =>
-            "webp",
+        "image/png" => "png",
 
-        "application/pdf" =>
-            "pdf"
+        "image/webp" => "webp",
+
+        "application/pdf" => "pdf"
     ];
 
-    $finfo =
-        new finfo(
-            FILEINFO_MIME_TYPE
-        );
+    /*
+     * Check whether finfo is available.
+     */
 
-    $mime_type =
-        $finfo->file(
-            $receipt["tmp_name"]
+    if (
+        !class_exists("finfo")
+    ) {
+
+        json_response(
+            false,
+            "File upload validation is not available on this server."
         );
+    }
+
+    $finfo = new finfo(
+        FILEINFO_MIME_TYPE
+    );
+
+    $mime_type = $finfo->file(
+        $receipt["tmp_name"]
+    );
 
     if (
         !isset(
-            $allowed_mime_types[
-                $mime_type
-            ]
+            $allowed_mime_types[$mime_type]
         )
     ) {
 
@@ -345,13 +406,40 @@ if (
     }
 
     /* -----------------------------------------------------
+       CHECK DIRECTORY WRITABLE
+    ----------------------------------------------------- */
+
+    if (
+        !is_writable(
+            $upload_directory
+        )
+    ) {
+
+        json_response(
+            false,
+            "The receipt upload directory is not writable."
+        );
+    }
+
+    /* -----------------------------------------------------
        FILE NAME
     ----------------------------------------------------- */
 
     $extension =
-        $allowed_mime_types[
-            $mime_type
-        ];
+        $allowed_mime_types[$mime_type];
+
+    try {
+
+        $random_part =
+            bin2hex(
+                random_bytes(5)
+            );
+
+    } catch (Throwable $e) {
+
+        $random_part =
+            uniqid();
+    }
 
     $file_name =
         "receipt_" .
@@ -359,9 +447,7 @@ if (
         "_" .
         date("YmdHis") .
         "_" .
-        bin2hex(
-            random_bytes(5)
-        ) .
+        $random_part .
         "." .
         $extension;
 
@@ -386,6 +472,10 @@ if (
         );
     }
 
+    /*
+     * This path is stored in the database notes.
+     */
+
     $receipt_relative_path =
         "php/uploads/receipts/" .
         $file_name;
@@ -395,13 +485,15 @@ if (
    VERIFY USER
 ========================================================= */
 
-$user_stmt =
-    $conn->prepare("
-        SELECT id
-        FROM users
-        WHERE id = ?
-        LIMIT 1
-    ");
+$user_stmt = $conn->prepare(
+    "
+    SELECT
+        id
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+    "
+);
 
 if (!$user_stmt) {
 
@@ -433,6 +525,17 @@ if (
 
     $user_stmt->close();
 
+    if ($receipt_relative_path) {
+
+        @unlink(
+            __DIR__ .
+            "/uploads/receipts/" .
+            basename(
+                $receipt_relative_path
+            )
+        );
+    }
+
     json_response(
         false,
         "Unable to verify your account."
@@ -449,6 +552,17 @@ if (
 
     $user_stmt->close();
 
+    if ($receipt_relative_path) {
+
+        @unlink(
+            __DIR__ .
+            "/uploads/receipts/" .
+            basename(
+                $receipt_relative_path
+            )
+        );
+    }
+
     json_response(
         false,
         "Your account could not be found."
@@ -461,25 +575,42 @@ $user_stmt->close();
    LOAD CART
 ========================================================= */
 
-$cart_stmt =
-    $conn->prepare("
-        SELECT
-            ci.id AS cart_item_id,
-            ci.product_id,
-            ci.quantity,
-            p.product_name,
-            p.price,
-            p.stock
-        FROM cart_items ci
-        INNER JOIN cart c
-            ON ci.cart_id = c.id
-        INNER JOIN products p
-            ON ci.product_id = p.id
-        WHERE c.user_id = ?
-        ORDER BY ci.id ASC
-    ");
+$cart_stmt = $conn->prepare(
+    "
+    SELECT
+        ci.id AS cart_item_id,
+        ci.product_id,
+        ci.quantity,
+        p.product_name,
+        p.price,
+        p.stock
+
+    FROM cart_items ci
+
+    INNER JOIN cart c
+        ON ci.cart_id = c.id
+
+    INNER JOIN products p
+        ON ci.product_id = p.id
+
+    WHERE c.user_id = ?
+
+    ORDER BY ci.id ASC
+    "
+);
 
 if (!$cart_stmt) {
+
+    if ($receipt_relative_path) {
+
+        @unlink(
+            __DIR__ .
+            "/uploads/receipts/" .
+            basename(
+                $receipt_relative_path
+            )
+        );
+    }
 
     json_response(
         false,
@@ -498,6 +629,17 @@ if (
 
     $cart_stmt->close();
 
+    if ($receipt_relative_path) {
+
+        @unlink(
+            __DIR__ .
+            "/uploads/receipts/" .
+            basename(
+                $receipt_relative_path
+            )
+        );
+    }
+
     json_response(
         false,
         "Unable to load your cart."
@@ -508,7 +650,12 @@ $cart_result =
     $cart_stmt->get_result();
 
 $cart_items = [];
-$total_amount = 0;
+
+$total_amount = 0.00;
+
+/* =========================================================
+   READ CART
+========================================================= */
 
 while (
     $row =
@@ -527,11 +674,26 @@ while (
     $stock =
         (int) $row["stock"];
 
+    /* -----------------------------------------------------
+       INVALID QUANTITY
+    ----------------------------------------------------- */
+
     if (
         $quantity <= 0
     ) {
 
         $cart_stmt->close();
+
+        if ($receipt_relative_path) {
+
+            @unlink(
+                __DIR__ .
+                "/uploads/receipts/" .
+                basename(
+                    $receipt_relative_path
+                )
+            );
+        }
 
         json_response(
             false,
@@ -539,17 +701,36 @@ while (
         );
     }
 
+    /* -----------------------------------------------------
+       INVALID STOCK
+    ----------------------------------------------------- */
+
     if (
         $stock < 0
     ) {
 
         $cart_stmt->close();
 
+        if ($receipt_relative_path) {
+
+            @unlink(
+                __DIR__ .
+                "/uploads/receipts/" .
+                basename(
+                    $receipt_relative_path
+                )
+            );
+        }
+
         json_response(
             false,
             "Invalid stock information for one of your products."
         );
     }
+
+    /* -----------------------------------------------------
+       CALCULATE SUBTOTAL
+    ----------------------------------------------------- */
 
     $subtotal =
         round(
@@ -561,6 +742,7 @@ while (
         $subtotal;
 
     $cart_items[] = [
+
         "cart_item_id" =>
             (int) $row["cart_item_id"],
 
@@ -600,6 +782,17 @@ if (
     empty($cart_items)
 ) {
 
+    if ($receipt_relative_path) {
+
+        @unlink(
+            __DIR__ .
+            "/uploads/receipts/" .
+            basename(
+                $receipt_relative_path
+            )
+        );
+    }
+
     json_response(
         false,
         "Your cart is empty."
@@ -607,14 +800,22 @@ if (
 }
 
 /* =========================================================
-   BUILD NOTES
+   BUILD ORDER NOTES
 ========================================================= */
 
 $notes_parts = [];
 
+/*
+ * Always save payment method.
+ */
+
 $notes_parts[] =
     "Payment Method: " .
     $payment_method;
+
+/*
+ * Online payment information.
+ */
 
 if (
     $payment_method === "Online Payment"
@@ -632,6 +833,21 @@ if (
             "Payment Receipt: " .
             $receipt_relative_path;
     }
+}
+
+/*
+ * COD information.
+ */
+
+if (
+    $payment_method === "Cash on Delivery"
+) {
+
+    $notes_parts[] =
+        "Payment Platform: None";
+
+    $notes_parts[] =
+        "Payment will be collected upon delivery.";
 }
 
 $order_notes =
@@ -661,23 +877,29 @@ try {
     ) {
 
         $product_id =
-            $item["product_id"];
+            (int) $item["product_id"];
 
         $quantity =
-            $item["quantity"];
+            (int) $item["quantity"];
 
         $stock_stmt =
-            $conn->prepare("
+            $conn->prepare(
+                "
                 SELECT
                     id,
                     product_name,
                     price,
                     stock
+
                 FROM products
+
                 WHERE id = ?
+
                 LIMIT 1
+
                 FOR UPDATE
-            ");
+                "
+            );
 
         if (!$stock_stmt) {
 
@@ -741,25 +963,25 @@ try {
 
     /* =====================================================
        CREATE ORDER
-       
-       IMPORTANT:
-       This uses the columns already used by admin/orders.php:
-       
-       user_id
-       total_amount
-       status
-       shipping_name
-       shipping_email
-       shipping_phone
-       shipping_address
-       notes
     ===================================================== */
 
-    $status =
-        "Pending";
+    $status = "Pending";
+
+    /*
+     * IMPORTANT:
+     *
+     * This version explicitly saves:
+     *
+     * payment_method
+     * payment_status
+     *
+     * This is important because your orders.php
+     * already reads these columns.
+     */
 
     $order_stmt =
-        $conn->prepare("
+        $conn->prepare(
+            "
             INSERT INTO orders
             (
                 user_id,
@@ -769,20 +991,54 @@ try {
                 shipping_email,
                 shipping_phone,
                 shipping_address,
-                notes
+                notes,
+                payment_method,
+                payment_status,
+                created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ");
+
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                NOW()
+            )
+            "
+        );
 
     if (!$order_stmt) {
 
         throw new Exception(
-            "Unable to create your order."
+            "Unable to create your order: " .
+            $conn->error
         );
     }
 
+    /*
+     * 11 values:
+     *
+     * i = user_id
+     * d = total_amount
+     * s = status
+     * s = shipping_name
+     * s = shipping_email
+     * s = shipping_phone
+     * s = shipping_address
+     * s = notes
+     * s = payment_method
+     * s = payment_status
+     */
+
     $order_stmt->bind_param(
-        "idssssss",
+        "idssssssss",
         $user_id,
         $total_amount,
         $status,
@@ -790,7 +1046,9 @@ try {
         $email,
         $phone,
         $address,
-        $order_notes
+        $order_notes,
+        $payment_method,
+        $payment_status
     );
 
     if (
@@ -813,6 +1071,15 @@ try {
 
     $order_stmt->close();
 
+    if (
+        $order_id <= 0
+    ) {
+
+        throw new Exception(
+            "The order could not be created."
+        );
+    }
+
     /* =====================================================
        CREATE ORDER ITEMS
     ===================================================== */
@@ -822,22 +1089,27 @@ try {
     ) {
 
         $product_id =
-            $item["product_id"];
+            (int) $item["product_id"];
 
         $product_name =
             $item["product_name"];
 
         $price =
-            $item["price"];
+            (float) $item["price"];
 
         $quantity =
-            $item["quantity"];
+            (int) $item["quantity"];
 
         $subtotal =
-            $item["subtotal"];
+            (float) $item["subtotal"];
+
+        /* -------------------------------------------------
+           INSERT ORDER ITEM
+        ------------------------------------------------- */
 
         $item_stmt =
-            $conn->prepare("
+            $conn->prepare(
+                "
                 INSERT INTO order_items
                 (
                     order_id,
@@ -847,13 +1119,24 @@ try {
                     quantity,
                     subtotal
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
-            ");
+
+                VALUES
+                (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?
+                )
+                "
+            );
 
         if (!$item_stmt) {
 
             throw new Exception(
-                "Unable to create order items."
+                "Unable to create order items: " .
+                $conn->error
             );
         }
 
@@ -884,17 +1167,22 @@ try {
 
         $item_stmt->close();
 
-        /* =================================================
+        /* -------------------------------------------------
            REDUCE STOCK
-        ================================================= */
+        ------------------------------------------------- */
 
         $update_stock_stmt =
-            $conn->prepare("
+            $conn->prepare(
+                "
                 UPDATE products
+
                 SET stock = stock - ?
+
                 WHERE id = ?
+
                 AND stock >= ?
-            ");
+                "
+            );
 
         if (!$update_stock_stmt) {
 
@@ -914,10 +1202,14 @@ try {
             !$update_stock_stmt->execute()
         ) {
 
+            $error =
+                $update_stock_stmt->error;
+
             $update_stock_stmt->close();
 
             throw new Exception(
-                "Unable to update product stock."
+                "Unable to update product stock: " .
+                $error
             );
         }
 
@@ -942,13 +1234,20 @@ try {
     ===================================================== */
 
     $cart_id_stmt =
-        $conn->prepare("
-            SELECT id
+        $conn->prepare(
+            "
+            SELECT
+                id
+
             FROM cart
+
             WHERE user_id = ?
+
             LIMIT 1
+
             FOR UPDATE
-        ");
+            "
+        );
 
     if (!$cart_id_stmt) {
 
@@ -1001,10 +1300,13 @@ try {
     ) {
 
         $clear_cart_stmt =
-            $conn->prepare("
+            $conn->prepare(
+                "
                 DELETE FROM cart_items
+
                 WHERE cart_id = ?
-            ");
+                "
+            );
 
         if (!$clear_cart_stmt) {
 
@@ -1022,10 +1324,14 @@ try {
             !$clear_cart_stmt->execute()
         ) {
 
+            $error =
+                $clear_cart_stmt->error;
+
             $clear_cart_stmt->close();
 
             throw new Exception(
-                "Unable to clear your cart."
+                "Unable to clear your cart: " .
+                $error
             );
         }
 
@@ -1055,7 +1361,13 @@ try {
                 $total_amount,
 
             "status" =>
-                $status
+                $status,
+
+            "payment_method" =>
+                $payment_method,
+
+            "payment_status" =>
+                $payment_status
         ]
     );
 
@@ -1069,7 +1381,17 @@ try {
         $transaction_started
     ) {
 
-        $conn->rollback();
+        try {
+
+            $conn->rollback();
+
+        } catch (Throwable $rollback_error) {
+
+            error_log(
+                "Rollback error: " .
+                $rollback_error->getMessage()
+            );
+        }
     }
 
     /* =====================================================
@@ -1088,7 +1410,9 @@ try {
             );
 
         if (
-            is_file($receipt_file)
+            is_file(
+                $receipt_file
+            )
         ) {
 
             @unlink(
@@ -1097,12 +1421,20 @@ try {
         }
     }
 
+    /* =====================================================
+       LOG ERROR
+    ===================================================== */
+
     error_log(
         "Checkout error for user " .
         $user_id .
         ": " .
         $e->getMessage()
     );
+
+    /* =====================================================
+       SEND ERROR
+    ===================================================== */
 
     json_response(
         false,
@@ -1111,3 +1443,4 @@ try {
 }
 
 ?>
+```
