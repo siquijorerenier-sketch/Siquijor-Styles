@@ -486,18 +486,19 @@ function e($value)
 
         <!-- PROFILE -->
 
-        <a
-            class="header-icon"
-            href="<?= $logged_in
-                ? 'orders.php'
-                : 'login.php'
-            ?>"
-            title="Profile"
-        >
+<a
+    class="header-icon profile-button"
+    href="<?= $logged_in
+        ? 'orders.php'
+        : 'login.php'
+    ?>"
+    title="My Profile"
+    aria-label="My Profile"
+>
 
-            <i class="fa-regular fa-user"></i>
+    <i class="fa-regular fa-user"></i>
 
-        </a>
+</a>
 
 
         <!-- CART -->
@@ -2066,24 +2067,6 @@ function e($value)
 
 
     <div class="footer-brand">
-
-
-        <div class="footer-logo-slot">
-
-
-            <img
-                src="images/logo.png"
-                alt="Siquijor Styles"
-                style="
-                    width:180px;
-                    height:auto;
-                    display:block;
-                "
-            >
-
-
-        </div>
-
 
         <p>
 

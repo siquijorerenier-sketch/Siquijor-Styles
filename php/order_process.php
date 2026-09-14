@@ -4,14 +4,20 @@ session_start();
 
 require_once __DIR__ . "/database.php";
 
+header(
+    "Content-Type: application/json; charset=UTF-8"
+);
+
 /* =========================================================
-   RETURN JSON
+   JSON RESPONSE
 ========================================================= */
 
-header("Content-Type: application/json; charset=UTF-8");
+function json_response(
+    bool $success,
+    string $message,
+    array $extra = []
+): void {
 
-function json_response(bool $success, string $message, array $extra = []): void
-{
     echo json_encode(
         array_merge(
             [
@@ -19,17 +25,20 @@ function json_response(bool $success, string $message, array $extra = []): void
                 "message" => $message
             ],
             $extra
-        )
+        ),
+        JSON_UNESCAPED_UNICODE
     );
 
     exit;
 }
 
 /* =========================================================
-   CHECK REQUEST
+   REQUEST CHECK
 ========================================================= */
 
-if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+if (
+    $_SERVER["REQUEST_METHOD"] !== "POST"
+) {
 
     json_response(
         false,
@@ -38,13 +47,12 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 }
 
 /* =========================================================
-   CHECK LOGIN
+   LOGIN CHECK
 ========================================================= */
 
 if (
-    !isset($_SESSION["logged_in"]) ||
-    $_SESSION["logged_in"] !== true ||
-    !isset($_SESSION["user_id"])
+    empty($_SESSION["logged_in"]) ||
+    empty($_SESSION["user_id"])
 ) {
 
     json_response(
@@ -53,34 +61,61 @@ if (
     );
 }
 
-$user_id = (int) $_SESSION["user_id"];
+$user_id =
+    (int) $_SESSION["user_id"];
 
 /* =========================================================
-   GET CHECKOUT DATA
+   DATABASE CHECK
 ========================================================= */
 
-$full_name = trim(
-    $_POST["full_name"] ?? ""
-);
+if (
+    !isset($conn) ||
+    !($conn instanceof mysqli)
+) {
 
-$email = trim(
-    $_POST["email"] ?? ""
-);
-
-$phone = trim(
-    $_POST["phone"] ?? ""
-);
-
-$address = trim(
-    $_POST["address"] ?? ""
-);
-
-$payment_method = trim(
-    $_POST["payment_method"] ?? "Cash on Delivery"
-);
+    json_response(
+        false,
+        "Database connection is not available."
+    );
+}
 
 /* =========================================================
-   VALIDATE DELIVERY INFORMATION
+   GET FORM DATA
+========================================================= */
+
+$full_name =
+    trim(
+        $_POST["full_name"] ?? ""
+    );
+
+$email =
+    trim(
+        $_POST["email"] ?? ""
+    );
+
+$phone =
+    trim(
+        $_POST["phone"] ?? ""
+    );
+
+$address =
+    trim(
+        $_POST["address"] ?? ""
+    );
+
+$payment_method =
+    trim(
+        $_POST["payment_method"] ??
+        "Cash on Delivery"
+    );
+
+$payment_platform =
+    trim(
+        $_POST["payment_platform"] ?? ""
+    );
+
+/* =========================================================
+   BASIC VALIDATION
 ========================================================= */
 
 if (
@@ -96,7 +131,12 @@ if (
     );
 }
 
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+if (
+    !filter_var(
+        $email,
+        FILTER_VALIDATE_EMAIL
+    )
+) {
 
     json_response(
         false,
@@ -104,8 +144,38 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     );
 }
 
+if (
+    strlen($full_name) > 100
+) {
+
+    json_response(
+        false,
+        "Your name is too long."
+    );
+}
+
+if (
+    strlen($email) > 150
+) {
+
+    json_response(
+        false,
+        "Your email address is too long."
+    );
+}
+
+if (
+    strlen($address) > 500
+) {
+
+    json_response(
+        false,
+        "Your delivery address is too long."
+    );
+}
+
 /* =========================================================
-   VALIDATE PAYMENT METHOD
+   PAYMENT VALIDATION
 ========================================================= */
 
 $allowed_payment_methods = [
@@ -127,22 +197,45 @@ if (
     );
 }
 
-/* =========================================================
-   PAYMENT DEFAULTS
-========================================================= */
+$allowed_platforms = [
+    "GCash",
+    "Maya",
+    "BDO",
+    "BPI",
+    "UnionBank"
+];
 
-$payment_status = "Pending";
-$payment_receipt = null;
-
-/* =========================================================
-   ONLINE PAYMENT RECEIPT
-========================================================= */
-
-if ($payment_method === "Online Payment") {
+if (
+    $payment_method === "Online Payment"
+) {
 
     if (
-        !isset($_FILES["payment_receipt"]) ||
-        $_FILES["payment_receipt"]["error"] !== UPLOAD_ERR_OK
+        !in_array(
+            $payment_platform,
+            $allowed_platforms,
+            true
+        )
+    ) {
+
+        json_response(
+            false,
+            "Please select a valid online payment platform."
+        );
+    }
+}
+
+/* =========================================================
+   RECEIPT
+========================================================= */
+
+$receipt_relative_path = null;
+
+if (
+    $payment_method === "Online Payment"
+) {
+
+    if (
+        !isset($_FILES["payment_receipt"])
     ) {
 
         json_response(
@@ -151,15 +244,28 @@ if ($payment_method === "Online Payment") {
         );
     }
 
-    $receipt = $_FILES["payment_receipt"];
+    $receipt =
+        $_FILES["payment_receipt"];
+
+    if (
+        $receipt["error"] !==
+        UPLOAD_ERR_OK
+    ) {
+
+        json_response(
+            false,
+            "There was a problem uploading your payment receipt."
+        );
+    }
 
     /* -----------------------------------------------------
-       FILE SIZE
+       SIZE
     ----------------------------------------------------- */
 
-    $max_file_size = 5 * 1024 * 1024;
-
-    if ($receipt["size"] > $max_file_size) {
+    if (
+        $receipt["size"] >
+        5 * 1024 * 1024
+    ) {
 
         json_response(
             false,
@@ -168,62 +274,84 @@ if ($payment_method === "Online Payment") {
     }
 
     /* -----------------------------------------------------
-       FILE TYPE
+       MIME TYPE
     ----------------------------------------------------- */
 
     $allowed_mime_types = [
-        "image/jpeg" => "jpg",
-        "image/png"  => "png",
-        "image/webp" => "webp",
-        "application/pdf" => "pdf"
+        "image/jpeg" =>
+            "jpg",
+
+        "image/png" =>
+            "png",
+
+        "image/webp" =>
+            "webp",
+
+        "application/pdf" =>
+            "pdf"
     ];
 
-    $file_info = new finfo(FILEINFO_MIME_TYPE);
+    $finfo =
+        new finfo(
+            FILEINFO_MIME_TYPE
+        );
 
-    $mime_type = $file_info->file(
-        $receipt["tmp_name"]
-    );
+    $mime_type =
+        $finfo->file(
+            $receipt["tmp_name"]
+        );
 
     if (
         !isset(
-            $allowed_mime_types[$mime_type]
+            $allowed_mime_types[
+                $mime_type
+            ]
         )
     ) {
 
         json_response(
             false,
-            "Invalid payment receipt format. Please upload JPG, PNG, WEBP, or PDF."
+            "Invalid receipt format. Please upload JPG, PNG, WEBP, or PDF."
         );
     }
 
     /* -----------------------------------------------------
-       CREATE RECEIPT DIRECTORY
+       UPLOAD DIRECTORY
     ----------------------------------------------------- */
 
     $upload_directory =
-        __DIR__ . "/uploads/receipts/";
+        __DIR__ .
+        "/uploads/receipts/";
 
     if (
-        !is_dir($upload_directory) &&
-        !mkdir(
-            $upload_directory,
-            0755,
-            true
+        !is_dir(
+            $upload_directory
         )
     ) {
 
-        json_response(
-            false,
-            "Unable to create the receipt upload directory."
-        );
+        if (
+            !mkdir(
+                $upload_directory,
+                0755,
+                true
+            )
+        ) {
+
+            json_response(
+                false,
+                "Unable to create the receipt upload directory."
+            );
+        }
     }
 
     /* -----------------------------------------------------
-       CREATE SAFE FILE NAME
+       FILE NAME
     ----------------------------------------------------- */
 
     $extension =
-        $allowed_mime_types[$mime_type];
+        $allowed_mime_types[
+            $mime_type
+        ];
 
     $file_name =
         "receipt_" .
@@ -231,7 +359,9 @@ if ($payment_method === "Online Payment") {
         "_" .
         date("YmdHis") .
         "_" .
-        bin2hex(random_bytes(5)) .
+        bin2hex(
+            random_bytes(5)
+        ) .
         "." .
         $extension;
 
@@ -240,7 +370,7 @@ if ($payment_method === "Online Payment") {
         $file_name;
 
     /* -----------------------------------------------------
-       MOVE UPLOADED FILE
+       MOVE FILE
     ----------------------------------------------------- */
 
     if (
@@ -256,38 +386,35 @@ if ($payment_method === "Online Payment") {
         );
     }
 
-    /*
-     * Store the relative path in the database.
-     */
-    $payment_receipt =
+    $receipt_relative_path =
         "php/uploads/receipts/" .
         $file_name;
-}
-
-/* =========================================================
-   VERIFY DATABASE CONNECTION
-========================================================= */
-
-if (!isset($conn) || !$conn) {
-
-    json_response(
-        false,
-        "Database connection failed."
-    );
 }
 
 /* =========================================================
    VERIFY USER
 ========================================================= */
 
-$user_stmt = $conn->prepare(
-    "SELECT id
-     FROM users
-     WHERE id = ?
-     LIMIT 1"
-);
+$user_stmt =
+    $conn->prepare("
+        SELECT id
+        FROM users
+        WHERE id = ?
+        LIMIT 1
+    ");
 
 if (!$user_stmt) {
+
+    if ($receipt_relative_path) {
+
+        @unlink(
+            __DIR__ .
+            "/uploads/receipts/" .
+            basename(
+                $receipt_relative_path
+            )
+        );
+    }
 
     json_response(
         false,
@@ -300,7 +427,9 @@ $user_stmt->bind_param(
     $user_id
 );
 
-if (!$user_stmt->execute()) {
+if (
+    !$user_stmt->execute()
+) {
 
     $user_stmt->close();
 
@@ -332,22 +461,23 @@ $user_stmt->close();
    LOAD CART
 ========================================================= */
 
-$cart_stmt = $conn->prepare(
-    "SELECT
-        ci.id AS cart_item_id,
-        ci.product_id,
-        ci.quantity,
-        p.product_name,
-        p.price,
-        p.stock
-     FROM cart_items ci
-     INNER JOIN cart c
-        ON ci.cart_id = c.id
-     INNER JOIN products p
-        ON ci.product_id = p.id
-     WHERE c.user_id = ?
-     ORDER BY ci.id ASC"
-);
+$cart_stmt =
+    $conn->prepare("
+        SELECT
+            ci.id AS cart_item_id,
+            ci.product_id,
+            ci.quantity,
+            p.product_name,
+            p.price,
+            p.stock
+        FROM cart_items ci
+        INNER JOIN cart c
+            ON ci.cart_id = c.id
+        INNER JOIN products p
+            ON ci.product_id = p.id
+        WHERE c.user_id = ?
+        ORDER BY ci.id ASC
+    ");
 
 if (!$cart_stmt) {
 
@@ -362,7 +492,9 @@ $cart_stmt->bind_param(
     $user_id
 );
 
-if (!$cart_stmt->execute()) {
+if (
+    !$cart_stmt->execute()
+) {
 
     $cart_stmt->close();
 
@@ -395,13 +527,27 @@ while (
     $stock =
         (int) $row["stock"];
 
-    if ($quantity <= 0) {
+    if (
+        $quantity <= 0
+    ) {
 
         $cart_stmt->close();
 
         json_response(
             false,
-            "Invalid quantity in your cart."
+            "Your cart contains an invalid quantity."
+        );
+    }
+
+    if (
+        $stock < 0
+    ) {
+
+        $cart_stmt->close();
+
+        json_response(
+            false,
+            "Invalid stock information for one of your products."
         );
     }
 
@@ -450,7 +596,9 @@ $total_amount =
    EMPTY CART
 ========================================================= */
 
-if (empty($cart_items)) {
+if (
+    empty($cart_items)
+) {
 
     json_response(
         false,
@@ -459,18 +607,58 @@ if (empty($cart_items)) {
 }
 
 /* =========================================================
-   START TRANSACTION
+   BUILD NOTES
 ========================================================= */
 
-$conn->begin_transaction();
+$notes_parts = [];
+
+$notes_parts[] =
+    "Payment Method: " .
+    $payment_method;
+
+if (
+    $payment_method === "Online Payment"
+) {
+
+    $notes_parts[] =
+        "Payment Platform: " .
+        $payment_platform;
+
+    if (
+        $receipt_relative_path
+    ) {
+
+        $notes_parts[] =
+            "Payment Receipt: " .
+            $receipt_relative_path;
+    }
+}
+
+$order_notes =
+    implode(
+        "\n",
+        $notes_parts
+    );
+
+/* =========================================================
+   TRANSACTION
+========================================================= */
+
+$transaction_started = false;
 
 try {
 
+    $conn->begin_transaction();
+
+    $transaction_started = true;
+
     /* =====================================================
-       LOCK PRODUCT ROWS AND CHECK STOCK
+       LOCK AND VERIFY PRODUCTS
     ===================================================== */
 
-    foreach ($cart_items as $item) {
+    foreach (
+        $cart_items as $item
+    ) {
 
         $product_id =
             $item["product_id"];
@@ -478,16 +666,18 @@ try {
         $quantity =
             $item["quantity"];
 
-        $stock_stmt = $conn->prepare(
-            "SELECT
-                id,
-                product_name,
-                price,
-                stock
-             FROM products
-             WHERE id = ?
-             FOR UPDATE"
-        );
+        $stock_stmt =
+            $conn->prepare("
+                SELECT
+                    id,
+                    product_name,
+                    price,
+                    stock
+                FROM products
+                WHERE id = ?
+                LIMIT 1
+                FOR UPDATE
+            ");
 
         if (!$stock_stmt) {
 
@@ -501,7 +691,9 @@ try {
             $product_id
         );
 
-        if (!$stock_stmt->execute()) {
+        if (
+            !$stock_stmt->execute()
+        ) {
 
             $stock_stmt->close();
 
@@ -540,55 +732,47 @@ try {
             throw new Exception(
                 "Not enough stock for " .
                 $product["product_name"] .
-                ". Available stock: " .
+                ". Only " .
                 $current_stock .
-                "."
+                " item(s) available."
             );
         }
     }
 
     /* =====================================================
        CREATE ORDER
+       
+       IMPORTANT:
+       This uses the columns already used by admin/orders.php:
+       
+       user_id
+       total_amount
+       status
+       shipping_name
+       shipping_email
+       shipping_phone
+       shipping_address
+       notes
     ===================================================== */
 
-    $status = "Pending";
+    $status =
+        "Pending";
 
-    /*
-     * IMPORTANT:
-     * 10 values are being inserted:
-     *
-     * user_id
-     * total_amount
-     * status
-     * payment_method
-     * payment_status
-     * payment_receipt
-     * shipping_name
-     * shipping_email
-     * shipping_phone
-     * shipping_address
-     *
-     * bind_param therefore uses:
-     *
-     * i d s s s s s s s s
-     */
-
-    $order_stmt = $conn->prepare(
-        "INSERT INTO orders
-        (
-            user_id,
-            total_amount,
-            status,
-            payment_method,
-            payment_status,
-            payment_receipt,
-            shipping_name,
-            shipping_email,
-            shipping_phone,
-            shipping_address
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    );
+    $order_stmt =
+        $conn->prepare("
+            INSERT INTO orders
+            (
+                user_id,
+                total_amount,
+                status,
+                shipping_name,
+                shipping_email,
+                shipping_phone,
+                shipping_address,
+                notes
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ");
 
     if (!$order_stmt) {
 
@@ -598,20 +782,20 @@ try {
     }
 
     $order_stmt->bind_param(
-        "idssssssss",
+        "idssssss",
         $user_id,
         $total_amount,
         $status,
-        $payment_method,
-        $payment_status,
-        $payment_receipt,
         $full_name,
         $email,
         $phone,
-        $address
+        $address,
+        $order_notes
     );
 
-    if (!$order_stmt->execute()) {
+    if (
+        !$order_stmt->execute()
+    ) {
 
         $error =
             $order_stmt->error;
@@ -633,7 +817,9 @@ try {
        CREATE ORDER ITEMS
     ===================================================== */
 
-    foreach ($cart_items as $item) {
+    foreach (
+        $cart_items as $item
+    ) {
 
         $product_id =
             $item["product_id"];
@@ -650,18 +836,19 @@ try {
         $subtotal =
             $item["subtotal"];
 
-        $item_stmt = $conn->prepare(
-            "INSERT INTO order_items
-            (
-                order_id,
-                product_id,
-                product_name,
-                price,
-                quantity,
-                subtotal
-            )
-            VALUES (?, ?, ?, ?, ?, ?)"
-        );
+        $item_stmt =
+            $conn->prepare("
+                INSERT INTO order_items
+                (
+                    order_id,
+                    product_id,
+                    product_name,
+                    price,
+                    quantity,
+                    subtotal
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+            ");
 
         if (!$item_stmt) {
 
@@ -680,7 +867,9 @@ try {
             $subtotal
         );
 
-        if (!$item_stmt->execute()) {
+        if (
+            !$item_stmt->execute()
+        ) {
 
             $error =
                 $item_stmt->error;
@@ -696,16 +885,16 @@ try {
         $item_stmt->close();
 
         /* =================================================
-           REDUCE PRODUCT STOCK
+           REDUCE STOCK
         ================================================= */
 
         $update_stock_stmt =
-            $conn->prepare(
-                "UPDATE products
-                 SET stock = stock - ?
-                 WHERE id = ?
-                   AND stock >= ?"
-            );
+            $conn->prepare("
+                UPDATE products
+                SET stock = stock - ?
+                WHERE id = ?
+                AND stock >= ?
+            ");
 
         if (!$update_stock_stmt) {
 
@@ -722,8 +911,7 @@ try {
         );
 
         if (
-            !$update_stock_stmt->execute() ||
-            $update_stock_stmt->affected_rows !== 1
+            !$update_stock_stmt->execute()
         ) {
 
             $update_stock_stmt->close();
@@ -733,20 +921,34 @@ try {
             );
         }
 
+        if (
+            $update_stock_stmt->affected_rows !== 1
+        ) {
+
+            $update_stock_stmt->close();
+
+            throw new Exception(
+                "Unable to update stock for " .
+                $product_name .
+                "."
+            );
+        }
+
         $update_stock_stmt->close();
     }
 
     /* =====================================================
-       FIND USER CART
+       FIND CART
     ===================================================== */
 
-    $cart_id_stmt = $conn->prepare(
-        "SELECT id
-         FROM cart
-         WHERE user_id = ?
-         LIMIT 1
-         FOR UPDATE"
-    );
+    $cart_id_stmt =
+        $conn->prepare("
+            SELECT id
+            FROM cart
+            WHERE user_id = ?
+            LIMIT 1
+            FOR UPDATE
+        ");
 
     if (!$cart_id_stmt) {
 
@@ -760,7 +962,9 @@ try {
         $user_id
     );
 
-    if (!$cart_id_stmt->execute()) {
+    if (
+        !$cart_id_stmt->execute()
+    ) {
 
         $cart_id_stmt->close();
 
@@ -789,16 +993,18 @@ try {
     $cart_id_stmt->close();
 
     /* =====================================================
-       CLEAR CART ITEMS
+       CLEAR CART
     ===================================================== */
 
-    if ($cart_id !== null) {
+    if (
+        $cart_id !== null
+    ) {
 
         $clear_cart_stmt =
-            $conn->prepare(
-                "DELETE FROM cart_items
-                 WHERE cart_id = ?"
-            );
+            $conn->prepare("
+                DELETE FROM cart_items
+                WHERE cart_id = ?
+            ");
 
         if (!$clear_cart_stmt) {
 
@@ -812,7 +1018,9 @@ try {
             $cart_id
         );
 
-        if (!$clear_cart_stmt->execute()) {
+        if (
+            !$clear_cart_stmt->execute()
+        ) {
 
             $clear_cart_stmt->close();
 
@@ -830,8 +1038,10 @@ try {
 
     $conn->commit();
 
+    $transaction_started = false;
+
     /* =====================================================
-       SUCCESS RESPONSE
+       SUCCESS
     ===================================================== */
 
     json_response(
@@ -844,11 +1054,8 @@ try {
             "total_amount" =>
                 $total_amount,
 
-            "payment_method" =>
-                $payment_method,
-
-            "payment_status" =>
-                $payment_status
+            "status" =>
+                $status
         ]
     );
 
@@ -858,23 +1065,26 @@ try {
        ROLLBACK
     ===================================================== */
 
-    $conn->rollback();
+    if (
+        $transaction_started
+    ) {
 
-    /*
-     * If an online receipt was uploaded but the order failed,
-     * remove the uploaded receipt so unused files are not left
-     * on the server.
-     */
+        $conn->rollback();
+    }
+
+    /* =====================================================
+       REMOVE RECEIPT IF ORDER FAILED
+    ===================================================== */
 
     if (
-        $payment_receipt !== null
+        $receipt_relative_path
     ) {
 
         $receipt_file =
             __DIR__ .
             "/uploads/receipts/" .
             basename(
-                $payment_receipt
+                $receipt_relative_path
             );
 
         if (
@@ -887,8 +1097,17 @@ try {
         }
     }
 
+    error_log(
+        "Checkout error for user " .
+        $user_id .
+        ": " .
+        $e->getMessage()
+    );
+
     json_response(
         false,
         $e->getMessage()
     );
 }
+
+?>

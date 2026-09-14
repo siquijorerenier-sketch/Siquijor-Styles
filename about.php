@@ -146,6 +146,10 @@ if ($logged_in) {
         rel="stylesheet"
         href="css/style.css">
 
+        <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
 
     <link
         href="https://fonts.googleapis.com/css2?family=Parisienne&family=Playfair+Display:wght@400;500;600;700&family=Poppins:wght@300;400;500;600&display=swap"
@@ -419,15 +423,18 @@ if ($logged_in) {
         <!-- PROFILE -->
 
         <?php if ($logged_in && $current_user): ?>
+<!-- PROFILE -->
 
-            <a
-                class="header-icon"
-                href="orders.php"
-                title="Profile">
+<a
+    class="header-icon profile-button"
+    href="<?= $logged_in ? 'orders.php' : 'login.php' ?>"
+    <?= !$logged_in ? 'onclick="saveReturnPage()"' : '' ?>
+    title="My Profile"
+    aria-label="My Profile">
 
-                ♙
+    <i class="fa-regular fa-user"></i>
 
-            </a>
+</a>
 
         <?php else: ?>
 
@@ -446,20 +453,19 @@ if ($logged_in) {
 
         <!-- CART -->
 
-        <a
-            class="header-icon cart-button"
-            href="cart.php"
-            title="Cart">
+ <a
+    class="header-icon cart-button"
+    href="cart.php"
+    title="Cart"
+    aria-label="Shopping Cart">
 
-            🛒
+    <i class="fa-solid fa-cart-shopping"></i>
 
-            <span id="cartCount">
+    <span id="cartCount">
+        <?= $cart_count ?>
+    </span>
 
-                <?= $cart_count ?>
-
-            </span>
-
-        </a>
+</a>
 
 
         <!-- LOGIN / LOGOUT -->
@@ -1187,11 +1193,9 @@ if ($logged_in) {
         </button>
 
 
-        <div class="profile-avatar">
-
-            ♙
-
-        </div>
+<div class="profile-avatar">
+    <i class="fa-regular fa-user"></i>
+</div>
 
 
         <?php if ($logged_in && $current_user): ?>

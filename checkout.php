@@ -1,27 +1,17 @@
 <?php
-
 session_start();
-
 require_once __DIR__ . "/php/database.php";
 
-/* =========================================================
-   CHECK LOGIN
-========================================================= */
-
-if (
-    !isset($_SESSION["logged_in"]) ||
-    $_SESSION["logged_in"] !== true ||
-    !isset($_SESSION["user_id"])
-) {
-    header("Location: login.php");
+if (empty($_SESSION["logged_in"]) || empty($_SESSION["user_id"])) {
+    header("Location: login.php?return=checkout.php");
     exit;
 }
 
 $user_id = (int) $_SESSION["user_id"];
 
-/* =========================================================
-   GET USER
-========================================================= */
+function e($value): string {
+    return htmlspecialchars((string) $value, ENT_QUOTES, "UTF-8");
+}
 
 $user_stmt = $conn->prepare(
     "SELECT id, full_name, email
@@ -31,37 +21,23 @@ $user_stmt = $conn->prepare(
 );
 
 if (!$user_stmt) {
-    die("Unable to load account information.");
+    die("Unable to load account information: " . e($conn->error));
 }
 
 $user_stmt->bind_param("i", $user_id);
+$user_stmt->execute();
 
-if (!$user_stmt->execute()) {
-    $user_stmt->close();
-    die("Unable to load account information.");
-}
+$user = $user_stmt->get_result()->fetch_assoc();
 
-$user_result = $user_stmt->get_result();
+$user_stmt->close();
 
-if (!$user_result || $user_result->num_rows === 0) {
-    $user_stmt->close();
-
+if (!$user) {
     session_unset();
     session_destroy();
 
     header("Location: login.php");
     exit;
 }
-
-$user = $user_result->fetch_assoc();
-
-$user_stmt->close();
-
-/* =========================================================
-   LOAD CART
-========================================================= */
-
-$cart_items = [];
 
 $cart_stmt = $conn->prepare(
     "SELECT
@@ -74,40 +50,40 @@ $cart_stmt = $conn->prepare(
         p.stock
      FROM cart_items ci
      INNER JOIN cart c
-        ON ci.cart_id = c.id
+        ON c.id = ci.cart_id
      INNER JOIN products p
-        ON ci.product_id = p.id
+        ON p.id = ci.product_id
      WHERE c.user_id = ?
      ORDER BY ci.id ASC"
 );
 
 if (!$cart_stmt) {
-    die("Unable to load your cart.");
+    die("Unable to load your cart: " . e($conn->error));
 }
 
 $cart_stmt->bind_param("i", $user_id);
-
-if (!$cart_stmt->execute()) {
-    $cart_stmt->close();
-    die("Unable to load your cart.");
-}
+$cart_stmt->execute();
 
 $cart_result = $cart_stmt->get_result();
 
-$total_amount = 0;
+$cart_items = [];
+$total_amount = 0.00;
+$total_quantity = 0;
 
 while ($row = $cart_result->fetch_assoc()) {
 
-    $row["cart_item_id"] = (int) $row["cart_item_id"];
     $row["product_id"] = (int) $row["product_id"];
     $row["quantity"] = (int) $row["quantity"];
     $row["price"] = (float) $row["price"];
     $row["stock"] = (int) $row["stock"];
 
-    $row["subtotal"] =
-        $row["price"] * $row["quantity"];
+    $row["subtotal"] = round(
+        $row["price"] * $row["quantity"],
+        2
+    );
 
     $total_amount += $row["subtotal"];
+    $total_quantity += $row["quantity"];
 
     $cart_items[] = $row;
 }
@@ -116,869 +92,1021 @@ $cart_stmt->close();
 
 $total_amount = round($total_amount, 2);
 
-/* =========================================================
-   EMPTY CART
-========================================================= */
-
-if (empty($cart_items)) {
+if (!$cart_items) {
     header("Location: cart.php");
     exit;
 }
-
-/* =========================================================
-   ESCAPE
-========================================================= */
-
-function e($value): string
-{
-    return htmlspecialchars(
-        (string) $value,
-        ENT_QUOTES,
-        "UTF-8"
-    );
-}
-
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
 
-<meta charset="UTF-8">
-
-<meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
->
-
-<title>Siquijor Styles | Checkout</title>
-
-<style>
-
-/* =========================================================
-   RESET
-========================================================= */
-
-* {
-    box-sizing: border-box;
-}
-
-body {
-    margin: 0;
-    font-family:
-        Inter,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        Arial,
-        sans-serif;
-
-    background: #f6f7f9;
-    color: #171717;
-}
-
-/* =========================================================
-   HEADER
-========================================================= */
-
-.checkout-header {
-    background: #111;
-    color: #fff;
-    padding: 18px 0;
-}
-
-.header-inner {
-    width: min(1180px, 92%);
-    margin: auto;
-
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.brand {
-    font-size: 21px;
-    font-weight: 800;
-    letter-spacing: .3px;
-}
-
-.secure-checkout {
-    font-size: 13px;
-    color: #cfcfcf;
-
-    display: flex;
-    align-items: center;
-    gap: 7px;
-}
-
-/* =========================================================
-   MAIN
-========================================================= */
-
-.container {
-    width: min(1180px, 92%);
-    margin: 38px auto 60px;
-}
-
-.page-heading {
-    margin-bottom: 28px;
-}
-
-.page-heading h1 {
-    margin: 0 0 7px;
-
-    font-size: 32px;
-    line-height: 1.2;
-    letter-spacing: -.5px;
-}
-
-.page-heading p {
-    margin: 0;
-    color: #707070;
-    font-size: 15px;
-}
-
-/* =========================================================
-   CHECKOUT GRID
-========================================================= */
-
-.checkout-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 390px;
-    gap: 25px;
-    align-items: start;
-}
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Checkout | Siquijor Styles</title>
+
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Parisienne&family=Playfair+Display:wght@500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    >
+
+    <style>
+
+        :root {
+            --teal: #285e61;
+            --teal-dark: #19494c;
+            --teal-soft: #e7f0ed;
+            --sand: #f7f1e7;
+            --cream: #fffaf2;
+            --gold: #d6ab63;
+            --coral: #d97a68;
+            --text: #29464a;
+            --muted: #73888b;
+            --border: #e5ddd0;
+            --white: #ffffff;
+            --danger: #a8463b;
+            --success: #2d735c;
+            --shadow: 0 18px 55px rgba(39, 76, 79, .10);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Poppins", sans-serif;
+            color: var(--text);
+
+            background:
+                radial-gradient(
+                    circle at 10% 0%,
+                    rgba(214,171,99,.11),
+                    transparent 28%
+                ),
+                linear-gradient(
+                    180deg,
+                    #fffdf8 0%,
+                    #f6f1e8 100%
+                );
+
+            min-height: 100vh;
+        }
 
-/* =========================================================
-   CARDS
-========================================================= */
+        .checkout-topbar {
+            background: rgba(255,255,255,.94);
+            border-bottom: 1px solid var(--border);
 
-.card {
-    background: #fff;
-    border: 1px solid #e7e7e7;
-    border-radius: 16px;
-    box-shadow: 0 6px 25px rgba(0, 0, 0, .04);
-}
+            position: sticky;
+            top: 0;
 
-.card-section {
-    padding: 25px;
-    border-bottom: 1px solid #ededed;
-}
+            z-index: 20;
 
-.card-section:last-child {
-    border-bottom: none;
-}
+            backdrop-filter: blur(10px);
+        }
 
-.card-title {
-    display: flex;
-    align-items: center;
-    gap: 11px;
+        .topbar-inner {
+            width: min(1180px, 92%);
+            min-height: 76px;
 
-    margin: 0 0 21px;
+            margin: auto;
 
-    font-size: 18px;
-    font-weight: 750;
-}
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
 
-.step-number {
-    width: 28px;
-    height: 28px;
+            gap: 20px;
+        }
 
-    border-radius: 50%;
+        .brand {
+            display: flex;
+            align-items: center;
 
-    background: #111;
-    color: #fff;
+            gap: 12px;
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+            text-decoration: none;
+            color: var(--teal);
+        }
 
-    font-size: 13px;
-    font-weight: 700;
-}
+        .brand-mark {
+            width: 42px;
+            height: 42px;
 
-/* =========================================================
-   ACCOUNT NOTICE
-========================================================= */
+            border-radius: 50%;
 
-.account-notice {
-    background: #f7f7f7;
-    border: 1px solid #e8e8e8;
+            background: var(--teal);
+            color: white;
 
-    border-radius: 11px;
+            display: grid;
+            place-items: center;
 
-    padding: 13px 15px;
-    margin-bottom: 21px;
+            box-shadow:
+                0 8px 20px rgba(40,94,97,.2);
+        }
 
-    font-size: 13px;
-    color: #666;
-}
+        .brand-text strong {
+            display: block;
 
-/* =========================================================
-   FORM
-========================================================= */
+            font-family: "Playfair Display", serif;
 
-.form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-}
+            font-size: 20px;
+            line-height: 1;
+        }
 
-.form-group {
-    margin-bottom: 17px;
-}
+        .brand-text span {
+            font-size: 10px;
+            color: var(--muted);
 
-.form-group:last-child {
-    margin-bottom: 0;
-}
+            letter-spacing: .14em;
+            text-transform: uppercase;
+        }
 
-.form-group label {
-    display: block;
+        .secure {
+            font-size: 12px;
+            color: var(--muted);
 
-    margin-bottom: 7px;
+            display: flex;
+            align-items: center;
 
-    font-size: 13px;
-    font-weight: 700;
-    color: #333;
-}
+            gap: 8px;
+        }
 
-.form-group input,
-.form-group textarea,
-.platform-select {
-    width: 100%;
+        .secure i {
+            color: var(--success);
+        }
 
-    border: 1px solid #d9d9d9;
-    border-radius: 10px;
+        .page {
+            width: min(1180px, 92%);
 
-    padding: 12px 13px;
+            margin: 40px auto 70px;
+        }
 
-    background: #fff;
-    color: #222;
+        .heading {
+            margin-bottom: 28px;
+        }
 
-    font-family: inherit;
-    font-size: 14px;
+        .eyebrow {
+            color: var(--gold);
 
-    outline: none;
+            font-size: 11px;
+            font-weight: 700;
 
-    transition:
-        border-color .2s,
-        box-shadow .2s;
-}
+            letter-spacing: .18em;
+            text-transform: uppercase;
 
-.form-group input:focus,
-.form-group textarea:focus,
-.platform-select:focus {
-    border-color: #111;
+            margin-bottom: 8px;
+        }
 
-    box-shadow:
-        0 0 0 3px rgba(0, 0, 0, .06);
-}
+        .heading h1 {
+            margin: 0;
 
-.form-group textarea {
-    min-height: 105px;
-    resize: vertical;
-}
+            font-family: "Playfair Display", serif;
 
-/* =========================================================
-   PAYMENT OPTIONS
-========================================================= */
+            color: var(--teal);
 
-.payment-options {
-    display: grid;
-    gap: 12px;
-}
+            font-size: clamp(34px, 5vw, 52px);
 
-.payment-option {
-    position: relative;
-}
+            line-height: 1.05;
+        }
 
-.payment-option input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-}
+        .heading p {
+            margin: 10px 0 0;
 
-.payment-option label {
-    display: flex;
-    align-items: center;
-    gap: 13px;
+            color: var(--muted);
 
-    padding: 16px;
+            font-size: 13px;
+        }
 
-    border: 1px solid #ddd;
-    border-radius: 12px;
+        .checkout-grid {
+            display: grid;
 
-    cursor: pointer;
+            grid-template-columns:
+                minmax(0, 1fr)
+                390px;
 
-    transition:
-        border-color .2s,
-        background .2s,
-        box-shadow .2s;
-}
+            gap: 26px;
 
-.payment-option label:hover {
-    border-color: #aaa;
-}
+            align-items: start;
+        }
 
-.payment-option input:checked + label {
-    border-color: #111;
-    background: #fafafa;
+        .card {
+            background: rgba(255,255,255,.96);
 
-    box-shadow:
-        0 0 0 1px #111;
-}
+            border: 1px solid var(--border);
 
-.payment-icon {
-    width: 42px;
-    height: 42px;
+            border-radius: 22px;
 
-    border-radius: 10px;
+            box-shadow: var(--shadow);
 
-    background: #111;
-    color: #fff;
+            overflow: hidden;
+        }
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+        .form-card {
+            padding: 30px;
+        }
 
-    font-size: 17px;
-    font-weight: 800;
+        .section + .section {
+            margin-top: 34px;
 
-    flex-shrink: 0;
-}
+            padding-top: 30px;
 
-.payment-details {
-    flex: 1;
-}
+            border-top: 1px solid var(--border);
+        }
 
-.payment-title {
-    font-size: 14px;
-    font-weight: 750;
+        .section-title {
+            display: flex;
+            align-items: center;
 
-    margin-bottom: 3px;
-}
+            gap: 12px;
 
-.payment-description {
-    font-size: 12px;
-    color: #777;
-}
+            margin-bottom: 20px;
+        }
 
-.radio-circle {
-    width: 19px;
-    height: 19px;
+        .step {
+            width: 34px;
+            height: 34px;
 
-    border: 2px solid #bbb;
-    border-radius: 50%;
+            border-radius: 50%;
 
-    position: relative;
-}
+            background: var(--teal);
+            color: white;
 
-.payment-option input:checked + label .radio-circle {
-    border-color: #111;
-}
+            display: grid;
+            place-items: center;
 
-.payment-option input:checked + label .radio-circle::after {
-    content: "";
+            font-size: 13px;
+            font-weight: 700;
 
-    position: absolute;
+            box-shadow:
+                0 7px 16px rgba(40,94,97,.2);
+        }
 
-    width: 9px;
-    height: 9px;
+        .section-title h2 {
+            margin: 0;
 
-    background: #111;
-    border-radius: 50%;
+            font-family: "Playfair Display", serif;
 
-    top: 3px;
-    left: 3px;
-}
+            color: var(--teal);
 
-/* =========================================================
-   ONLINE PAYMENT PANEL
-========================================================= */
+            font-size: 23px;
+        }
 
-.online-payment-box {
-    display: none;
+        .section-title p {
+            margin: 3px 0 0;
 
-    margin-top: 16px;
+            color: var(--muted);
 
-    border: 1px solid #dedede;
-    border-radius: 13px;
+            font-size: 11px;
+        }
 
-    background: #fafafa;
+        .account-note {
+            display: flex;
 
-    padding: 18px;
-}
+            gap: 10px;
 
-.online-payment-box.show {
-    display: block;
-}
+            align-items: flex-start;
 
-.online-heading {
-    margin-bottom: 15px;
-}
+            background: var(--teal-soft);
+            color: #456b6d;
 
-.online-heading h3 {
-    margin: 0 0 5px;
+            border: 1px solid #d5e5e0;
 
-    font-size: 15px;
-}
+            padding: 13px 15px;
 
-.online-heading p {
-    margin: 0;
+            border-radius: 12px;
 
-    font-size: 12px;
-    color: #777;
-    line-height: 1.5;
-}
+            font-size: 11px;
 
-/* =========================================================
-   PLATFORM
-========================================================= */
+            line-height: 1.65;
 
-.platform-label {
-    font-size: 13px;
-    font-weight: 700;
+            margin-bottom: 22px;
+        }
 
-    margin-bottom: 7px;
+        .account-note i {
+            color: var(--teal);
 
-    display: block;
-}
+            margin-top: 3px;
+        }
 
-.platform-select {
-    cursor: pointer;
-}
+        .form-row {
+            display: grid;
 
-/* =========================================================
-   PAYMENT INSTRUCTIONS
-========================================================= */
+            grid-template-columns: 1fr 1fr;
 
-.payment-instructions {
-    display: none;
+            gap: 15px;
+        }
 
-    margin-top: 15px;
+        .field {
+            margin-bottom: 16px;
+        }
 
-    background: #fff;
+        .field label {
+            display: block;
 
-    border: 1px solid #e2e2e2;
-    border-radius: 11px;
+            margin: 0 0 7px;
 
-    padding: 15px;
-}
+            font-size: 11px;
+            font-weight: 600;
 
-.payment-instructions.show {
-    display: block;
-}
+            color: #456267;
+        }
 
-.payment-instructions h4 {
-    margin: 0 0 8px;
+        .field input,
+        .field textarea,
+        .field select {
+            width: 100%;
 
-    font-size: 14px;
-}
+            padding: 13px 14px;
 
-.payment-instructions p {
-    margin: 5px 0;
+            border: 1px solid #d8d4ca;
 
-    color: #666;
+            border-radius: 12px;
 
-    font-size: 12px;
-    line-height: 1.5;
-}
+            background: #fffdf9;
 
-.instruction-note {
-    margin-top: 12px !important;
+            color: var(--text);
 
-    padding: 10px;
+            font: inherit;
 
-    background: #f5f5f5;
-    border-radius: 8px;
-}
+            font-size: 12px;
 
-/* =========================================================
-   RECEIPT
-========================================================= */
+            outline: none;
 
-.receipt-area {
-    margin-top: 16px;
-}
+            transition: .2s ease;
+        }
 
-.receipt-area label {
-    display: block;
+        .field input:focus,
+        .field textarea:focus,
+        .field select:focus {
+            border-color: var(--teal);
 
-    margin-bottom: 7px;
+            box-shadow:
+                0 0 0 4px rgba(40,94,97,.10);
 
-    font-size: 13px;
-    font-weight: 700;
-}
+            background: white;
+        }
 
-.receipt-input {
-    width: 100%;
+        .field textarea {
+            min-height: 112px;
 
-    padding: 11px;
+            resize: vertical;
+        }
 
-    border: 1px dashed #aaa;
-    border-radius: 10px;
+        .payment-options {
+            display: grid;
 
-    background: #fff;
+            grid-template-columns: 1fr 1fr;
 
-    font-size: 13px;
-}
+            gap: 14px;
+        }
 
-.receipt-help {
-    margin: 7px 0 0;
+        .payment-choice {
+            position: relative;
+        }
 
-    color: #888;
+        .payment-choice input {
+            position: absolute;
 
-    font-size: 11px;
-}
+            opacity: 0;
 
-/* =========================================================
-   ORDER SUMMARY
-========================================================= */
+            pointer-events: none;
+        }
 
-.summary-card {
-    position: sticky;
-    top: 20px;
-}
+        .payment-choice label {
+            min-height: 112px;
 
-.summary-header {
-    padding: 22px 22px 18px;
+            display: flex;
+            align-items: center;
 
-    border-bottom: 1px solid #eee;
-}
+            gap: 12px;
 
-.summary-header h2 {
-    margin: 0 0 4px;
+            padding: 16px;
 
-    font-size: 18px;
-}
+            border: 1px solid #ddd7cc;
 
-.summary-header p {
-    margin: 0;
+            border-radius: 16px;
 
-    font-size: 12px;
-    color: #888;
-}
+            cursor: pointer;
 
-.summary-items {
-    padding: 5px 22px;
-}
+            background: #fffdf9;
 
-.order-item {
-    display: flex;
-    align-items: center;
+            transition: .2s ease;
+        }
 
-    gap: 12px;
+        .payment-choice label:hover {
+            transform: translateY(-2px);
 
-    padding: 15px 0;
+            border-color: #b9c9c7;
+        }
 
-    border-bottom: 1px solid #eee;
-}
+        .payment-choice input:checked + label {
+            border: 2px solid var(--teal);
 
-.order-item:last-child {
-    border-bottom: none;
-}
+            background: var(--teal-soft);
+        }
 
-.product-image {
-    width: 65px;
-    height: 65px;
+        .pay-icon {
+            width: 44px;
+            height: 44px;
 
-    border-radius: 10px;
+            border-radius: 12px;
 
-    object-fit: cover;
+            background: var(--teal);
+            color: white;
 
-    background: #eee;
+            display: grid;
+            place-items: center;
 
-    flex-shrink: 0;
-}
+            flex-shrink: 0;
+        }
 
-.product-info {
-    flex: 1;
-    min-width: 0;
-}
+        .pay-copy {
+            flex: 1;
+        }
 
-.product-name {
-    font-size: 13px;
-    font-weight: 700;
+        .pay-copy strong {
+            display: block;
 
-    margin-bottom: 5px;
+            color: var(--teal-dark);
 
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
+            font-size: 12px;
 
-.product-meta {
-    color: #888;
-    font-size: 12px;
-}
+            margin-bottom: 3px;
+        }
 
-.product-subtotal {
-    font-size: 13px;
-    font-weight: 750;
+        .pay-copy span {
+            display: block;
 
-    white-space: nowrap;
-}
+            color: var(--muted);
 
-.summary-total {
-    margin: 0 22px;
+            font-size: 10px;
 
-    padding: 19px 0;
+            line-height: 1.5;
+        }
 
-    border-top: 1px solid #ddd;
+        .check-dot {
+            width: 18px;
+            height: 18px;
 
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
+            border: 2px solid #a9b6b4;
 
-.total-label {
-    font-size: 14px;
-    color: #666;
-}
+            border-radius: 50%;
 
-.total-price {
-    font-size: 24px;
-    font-weight: 800;
-}
+            position: relative;
+        }
 
-/* =========================================================
-   BUTTON
-========================================================= */
+        .payment-choice input:checked
+        + label
+        .check-dot {
+            border-color: var(--teal);
+        }
 
-.summary-action {
-    padding: 0 22px 22px;
-}
+        .payment-choice input:checked
+        + label
+        .check-dot::after {
+            content: "";
 
-.checkout-button {
-    width: 100%;
+            position: absolute;
 
-    border: none;
-    border-radius: 11px;
+            inset: 3px;
 
-    padding: 15px;
+            border-radius: 50%;
 
-    background: #111;
-    color: #fff;
+            background: var(--teal);
+        }
 
-    font-size: 14px;
-    font-weight: 750;
+        .online-box {
+            display: none;
 
-    cursor: pointer;
+            margin-top: 16px;
 
-    transition:
-        transform .15s,
-        opacity .15s;
-}
+            padding: 19px;
 
-.checkout-button:hover {
-    transform: translateY(-1px);
-    opacity: .92;
-}
+            background: #fbf8f2;
 
-.checkout-button:disabled {
-    opacity: .55;
-    cursor: not-allowed;
-    transform: none;
-}
+            border: 1px dashed #d5c9b6;
 
-.back-link {
-    display: block;
+            border-radius: 16px;
+        }
 
-    margin-top: 13px;
+        .online-box.show {
+            display: block;
+        }
 
-    text-align: center;
+        .instructions {
+            display: none;
 
-    color: #666;
+            margin: 13px 0 0;
 
-    text-decoration: none;
+            padding: 13px;
 
-    font-size: 13px;
-}
+            border-radius: 12px;
 
-.back-link:hover {
-    color: #111;
-}
+            background: white;
 
-/* =========================================================
-   SECURITY
-========================================================= */
+            border-left: 4px solid var(--gold);
 
-.security-note {
-    text-align: center;
+            font-size: 10px;
 
-    padding: 15px 22px 21px;
+            line-height: 1.65;
 
-    color: #999;
+            color: #61777a;
+        }
 
-    font-size: 11px;
-}
+        .instructions.show {
+            display: block;
+        }
 
-/* =========================================================
-   MOBILE
-========================================================= */
+        .upload-note {
+            font-size: 10px;
 
-@media (max-width: 850px) {
+            color: var(--muted);
 
-    .checkout-grid {
-        grid-template-columns: 1fr;
-    }
+            margin-top: 6px;
+        }
 
-    .summary-card {
-        position: static;
-        order: -1;
-    }
+        .message {
+            display: none;
 
-    .container {
-        width: 94%;
-        margin-top: 25px;
-    }
+            border-radius: 12px;
 
-}
+            padding: 13px 15px;
 
-@media (max-width: 550px) {
+            margin-top: 18px;
 
-    .header-inner {
-        width: 94%;
-    }
+            font-size: 11px;
 
-    .secure-checkout {
-        display: none;
-    }
+            line-height: 1.55;
+        }
 
-    .page-heading h1 {
-        font-size: 27px;
-    }
+        .message.show {
+            display: block;
+        }
 
-    .card-section {
-        padding: 20px;
-    }
+        .message.error {
+            background: #fff0ed;
 
-    .form-row {
-        grid-template-columns: 1fr;
-        gap: 0;
-    }
+            border: 1px solid #f0c9c1;
 
-    .summary-items {
-        padding-left: 18px;
-        padding-right: 18px;
-    }
+            color: var(--danger);
+        }
 
-    .summary-total {
-        margin-left: 18px;
-        margin-right: 18px;
-    }
+        .message.success {
+            background: #ebf7f1;
 
-    .summary-action {
-        padding-left: 18px;
-        padding-right: 18px;
-    }
+            border: 1px solid #c7e4d5;
 
-}
+            color: var(--success);
+        }
 
-</style>
+        .place-btn {
+            width: 100%;
+
+            margin-top: 20px;
+
+            border: 0;
+
+            border-radius: 13px;
+
+            padding: 15px 18px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    var(--teal),
+                    var(--teal-dark)
+                );
+
+            color: white;
+
+            font: inherit;
+
+            font-size: 12px;
+
+            font-weight: 700;
+
+            cursor: pointer;
+
+            box-shadow:
+                0 10px 24px rgba(40,94,97,.22);
+
+            transition: .2s ease;
+        }
+
+        .place-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .place-btn:disabled {
+            opacity: .6;
+
+            cursor: wait;
+
+            transform: none;
+        }
+
+        .back-link {
+            display: inline-flex;
+
+            align-items: center;
+
+            gap: 7px;
+
+            margin-top: 14px;
+
+            color: var(--teal);
+
+            text-decoration: none;
+
+            font-size: 11px;
+        }
+
+        .summary-card {
+            position: sticky;
+
+            top: 98px;
+        }
+
+        .summary-head {
+            padding: 24px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    var(--teal),
+                    #367377
+                );
+
+            color: white;
+        }
+
+        .summary-head h2 {
+            margin: 0;
+
+            font-family: "Playfair Display", serif;
+
+            font-size: 24px;
+        }
+
+        .summary-head p {
+            margin: 5px 0 0;
+
+            opacity: .82;
+
+            font-size: 10px;
+        }
+
+        .summary-items {
+            padding: 10px 22px;
+
+            max-height: 390px;
+
+            overflow-y: auto;
+        }
+
+        .summary-item {
+            display: grid;
+
+            grid-template-columns:
+                62px
+                1fr
+                auto;
+
+            gap: 11px;
+
+            align-items: center;
+
+            padding: 14px 0;
+
+            border-bottom: 1px solid #eee7dd;
+        }
+
+        .summary-item:last-child {
+            border-bottom: 0;
+        }
+
+        .summary-image {
+            width: 62px;
+            height: 62px;
+
+            border-radius: 12px;
+
+            object-fit: cover;
+
+            background: #eee8de;
+        }
+
+        .summary-name {
+            font-size: 11px;
+
+            font-weight: 600;
+
+            color: var(--teal-dark);
+
+            line-height: 1.4;
+        }
+
+        .summary-meta {
+            margin-top: 4px;
+
+            font-size: 9px;
+
+            color: var(--muted);
+        }
+
+        .summary-price {
+            font-size: 11px;
+
+            font-weight: 700;
+
+            color: var(--teal);
+
+            white-space: nowrap;
+        }
+
+        .totals {
+            padding: 18px 22px 24px;
+
+            border-top: 1px solid var(--border);
+
+            background: #fffdf9;
+        }
+
+        .total-row {
+            display: flex;
+
+            justify-content: space-between;
+
+            gap: 16px;
+
+            font-size: 10px;
+
+            color: var(--muted);
+
+            margin-bottom: 8px;
+        }
+
+        .grand-total {
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            gap: 16px;
+
+            margin-top: 14px;
+
+            padding-top: 14px;
+
+            border-top: 1px dashed #d8d0c3;
+        }
+
+        .grand-total strong:first-child {
+            font-size: 12px;
+
+            color: var(--text);
+        }
+
+        .grand-total strong:last-child {
+            font-family: "Playfair Display", serif;
+
+            color: var(--teal);
+
+            font-size: 25px;
+        }
+
+        .summary-trust {
+            padding: 14px 22px 20px;
+
+            text-align: center;
+
+            font-size: 9px;
+
+            color: var(--muted);
+        }
+
+        .summary-trust i {
+            color: var(--success);
+
+            margin-right: 4px;
+        }
+
+        @media (max-width: 900px) {
+
+            .checkout-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .summary-card {
+                position: static;
+
+                order: -1;
+            }
+
+            .summary-items {
+                max-height: none;
+            }
+        }
+
+        @media (max-width: 600px) {
+
+            .page {
+                width: 94%;
+
+                margin-top: 25px;
+            }
+
+            .topbar-inner {
+                width: 94%;
+            }
+
+            .secure {
+                display: none;
+            }
+
+            .form-card {
+                padding: 21px;
+            }
+
+            .form-row,
+            .payment-options {
+                grid-template-columns: 1fr;
+            }
+
+            .heading h1 {
+                font-size: 36px;
+            }
+        }
+
+    </style>
 
 </head>
 
 <body>
 
-<!-- =====================================================
-     HEADER
-====================================================== -->
+<header class="checkout-topbar">
 
-<header class="checkout-header">
+    <div class="topbar-inner">
 
-    <div class="header-inner">
+        <a
+            class="brand"
+            href="index.php"
+        >
 
-        <div class="brand">
-            Siquijor Styles
-        </div>
+            <span class="brand-mark">
+                <i class="fa-solid fa-water"></i>
+            </span>
 
-        <div class="secure-checkout">
-            🔒 Secure Checkout
+            <span class="brand-text">
+
+                <strong>
+                    Siquijor Styles
+                </strong>
+
+                <span>
+                    Island wear & lifestyle
+                </span>
+
+            </span>
+
+        </a>
+
+        <div class="secure">
+
+            <i class="fa-solid fa-shield-halved"></i>
+
+            Secure checkout
+
         </div>
 
     </div>
 
 </header>
 
-<!-- =====================================================
-     MAIN
-====================================================== -->
+<main class="page">
 
-<main class="container">
+    <div class="heading">
 
-    <div class="page-heading">
+        <div class="eyebrow">
+            Almost there
+        </div>
 
-        <h1>Checkout</h1>
+        <h1>
+            Complete your order
+        </h1>
 
         <p>
-            Complete your delivery details and choose how you want to pay.
+            Review your items, enter your delivery details,
+            and choose your payment method.
         </p>
 
     </div>
 
     <div class="checkout-grid">
 
-        <!-- =================================================
-             LEFT
-        ================================================== -->
+        <section class="card form-card">
 
-        <div class="card">
+            <form
+                id="checkoutForm"
+                enctype="multipart/form-data"
+                novalidate
+            >
 
-            <!-- DELIVERY -->
+                <div class="section">
 
-            <div class="card-section">
+                    <div class="section-title">
 
-                <h2 class="card-title">
+                        <span class="step">
+                            1
+                        </span>
 
-                    <span class="step-number">1</span>
+                        <div>
 
-                    Delivery Information
+                            <h2>
+                                Delivery information
+                            </h2>
 
-                </h2>
+                            <p>
+                                Where should we send your order?
+                            </p>
 
-                <div class="account-notice">
+                        </div>
 
-                    Your account information has been loaded automatically.
-                    Please make sure your delivery details are correct.
+                    </div>
 
-                </div>
+                    <div class="account-note">
 
-                <form
-                    id="checkoutForm"
-                    onsubmit="submitOrder(event)"
-                    enctype="multipart/form-data"
-                >
+                        <i class="fa-solid fa-circle-info"></i>
+
+                        <span>
+                            Your account name and email are filled
+                            in automatically. Please check your phone
+                            number and complete delivery address before
+                            placing the order.
+                        </span>
+
+                    </div>
 
                     <div class="form-row">
 
-                        <div class="form-group">
+                        <div class="field">
 
                             <label for="full_name">
-                                Full Name
+                                Full name
                             </label>
 
                             <input
-                                type="text"
                                 id="full_name"
                                 name="full_name"
-                                value="<?= e($user["full_name"]) ?>"
+                                type="text"
+                                value="<?= e($user['full_name']) ?>"
+                                autocomplete="name"
                                 required
                             >
 
                         </div>
 
-                        <div class="form-group">
+                        <div class="field">
 
                             <label for="phone">
-                                Phone Number
+                                Phone number
                             </label>
 
                             <input
-                                type="tel"
                                 id="phone"
                                 name="phone"
+                                type="tel"
                                 placeholder="09XXXXXXXXX"
+                                autocomplete="tel"
+                                maxlength="20"
                                 required
                             >
 
@@ -986,55 +1114,66 @@ body {
 
                     </div>
 
-                    <div class="form-group">
+                    <div class="field">
 
                         <label for="email">
-                            Email Address
+                            Email address
                         </label>
 
                         <input
-                            type="email"
                             id="email"
                             name="email"
-                            value="<?= e($user["email"]) ?>"
+                            type="email"
+                            value="<?= e($user['email']) ?>"
+                            autocomplete="email"
                             required
                         >
 
                     </div>
 
-                    <div class="form-group">
+                    <div class="field">
 
                         <label for="address">
-                            Delivery Address
+                            Complete delivery address
                         </label>
 
                         <textarea
                             id="address"
                             name="address"
-                            placeholder="House number, street, barangay, municipality, province..."
+                            placeholder="House/lot number, street, barangay, municipality/city, province"
+                            autocomplete="street-address"
                             required
                         ></textarea>
 
                     </div>
 
-                    <!-- PAYMENT -->
+                </div>
 
-                    <h2
-                        class="card-title"
-                        style="margin-top:30px;"
-                    >
+                <div class="section">
 
-                        <span class="step-number">2</span>
+                    <div class="section-title">
 
-                        Payment Method
+                        <span class="step">
+                            2
+                        </span>
 
-                    </h2>
+                        <div>
+
+                            <h2>
+                                Payment method
+                            </h2>
+
+                            <p>
+                                Choose the most convenient way to pay.
+                            </p>
+
+                        </div>
+
+                    </div>
 
                     <div class="payment-options">
 
-                        <!-- COD -->
-
-                        <div class="payment-option">
+                        <div class="payment-choice">
 
                             <input
                                 type="radio"
@@ -1042,64 +1181,60 @@ body {
                                 name="payment_method"
                                 value="Cash on Delivery"
                                 checked
-                                onchange="changePaymentMethod()"
                             >
 
                             <label for="cod">
 
-                                <span class="payment-icon">
-                                    ₱
+                                <span class="pay-icon">
+                                    <i class="fa-solid fa-truck-fast"></i>
                                 </span>
 
-                                <span class="payment-details">
+                                <span class="pay-copy">
 
-                                    <span class="payment-title">
+                                    <strong>
                                         Cash on Delivery
-                                    </span>
+                                    </strong>
 
-                                    <span class="payment-description">
-                                        Pay when your order arrives.
+                                    <span>
+                                        Pay in cash when your order arrives.
                                     </span>
 
                                 </span>
 
-                                <span class="radio-circle"></span>
+                                <span class="check-dot"></span>
 
                             </label>
 
                         </div>
 
-                        <!-- ONLINE -->
-
-                        <div class="payment-option">
+                        <div class="payment-choice">
 
                             <input
                                 type="radio"
                                 id="online"
                                 name="payment_method"
                                 value="Online Payment"
-                                onchange="changePaymentMethod()"
                             >
 
                             <label for="online">
 
-                                <span class="payment-icon">
-                                    ₱
+                                <span class="pay-icon">
+                                    <i class="fa-solid fa-wallet"></i>
                                 </span>
 
-                                <span class="payment-details">
+                                <span class="pay-copy">
 
-                                    <span class="payment-title">
+                                    <strong>
                                         Online Payment
-                                    </span>
+                                    </strong>
 
-                                    <span class="payment-description">
-                                        Pay using an online banking or payment platform.
+                                    <span>
+                                        Pay first and upload your payment receipt.
                                     </span>
 
                                 </span>
 
-                                <span class="radio-circle"></span>
+                                <span class="check-dot"></span>
 
                             </label>
 
@@ -1107,157 +1242,130 @@ body {
 
                     </div>
 
-                    <!-- ONLINE PAYMENT -->
-
                     <div
-                        id="onlinePaymentBox"
-                        class="online-payment-box"
+                        class="online-box"
+                        id="onlineBox"
                     >
 
-                        <div class="online-heading">
+                        <div class="field">
 
-                            <h3>
-                                Choose your payment platform
-                            </h3>
+                            <label for="payment_platform">
+                                Payment platform
+                            </label>
 
-                            <p>
-                                Select a platform below. Payment instructions
-                                will appear before you upload your receipt.
-                            </p>
+                            <select
+                                id="payment_platform"
+                                name="payment_platform"
+                            >
+
+                                <option value="">
+                                    Select payment platform
+                                </option>
+
+                                <option value="GCash">
+                                    GCash
+                                </option>
+
+                                <option value="Maya">
+                                    Maya
+                                </option>
+
+                                <option value="BDO">
+                                    BDO Online Banking
+                                </option>
+
+                                <option value="BPI">
+                                    BPI Online Banking
+                                </option>
+
+                                <option value="UnionBank">
+                                    UnionBank Online Banking
+                                </option>
+
+                            </select>
 
                         </div>
-
-                        <label
-                            class="platform-label"
-                            for="payment_platform"
-                        >
-                            Online Payment Platform
-                        </label>
-
-                        <select
-                            id="payment_platform"
-                            name="payment_platform"
-                            class="platform-select"
-                            onchange="changePaymentPlatform()"
-                        >
-
-                            <option value="">
-                                Select a platform
-                            </option>
-
-                            <option value="GCash">
-                                GCash
-                            </option>
-
-                            <option value="Maya">
-                                Maya
-                            </option>
-
-                            <option value="BDO">
-                                BDO Online Banking
-                            </option>
-
-                            <option value="BPI">
-                                BPI Online Banking
-                            </option>
-
-                            <option value="UnionBank">
-                                UnionBank Online Banking
-                            </option>
-
-                        </select>
-
-                        <!-- INSTRUCTIONS -->
 
                         <div
-                            id="paymentInstructions"
-                            class="payment-instructions"
+                            class="instructions"
+                            id="instructions"
+                        ></div>
+
+                        <div
+                            class="field"
+                            style="margin-top:14px;margin-bottom:0;"
                         >
 
-                            <h4 id="instructionTitle">
-                                Payment Instructions
-                            </h4>
-
-                            <p id="instructionText">
-                            </p>
-
-                            <p class="instruction-note">
-
-                                <strong>Important:</strong>
-                                Do not upload a receipt until you have
-                                completed your payment.
-
-                            </p>
-
-                        </div>
-
-                        <!-- RECEIPT -->
-
-                        <div class="receipt-area">
-
                             <label for="payment_receipt">
-
-                                Payment Receipt
-
+                                Payment receipt
                             </label>
 
                             <input
-                                type="file"
                                 id="payment_receipt"
                                 name="payment_receipt"
-                                class="receipt-input"
+                                type="file"
                                 accept="image/jpeg,image/png,image/webp,application/pdf"
                             >
 
-                            <p class="receipt-help">
-
-                                Accepted formats:
-                                JPG, PNG, WEBP, or PDF.
-
-                            </p>
+                            <div class="upload-note">
+                                JPG, PNG, WEBP, or PDF only.
+                                Maximum file size: 5 MB.
+                            </div>
 
                         </div>
 
                     </div>
 
-                    <button
-                        type="submit"
-                        class="checkout-button"
-                        id="placeOrderButton"
-                        style="margin-top:25px;"
-                    >
-                        Place Order
-                    </button>
+                </div>
 
-                </form>
+                <div
+                    id="checkoutMessage"
+                    class="message"
+                    role="alert"
+                    aria-live="polite"
+                ></div>
+
+                <button
+                    class="place-btn"
+                    id="placeOrderButton"
+                    type="submit"
+                >
+
+                    <i class="fa-solid fa-lock"></i>
+
+                    &nbsp;&nbsp;
+
+                    Place Order · ₱<?= number_format($total_amount, 2) ?>
+
+                </button>
 
                 <a
-                    href="cart.php"
                     class="back-link"
+                    href="cart.php"
                 >
-                    ← Return to Cart
+
+                    <i class="fa-solid fa-arrow-left"></i>
+
+                    Return to cart
+
                 </a>
 
-            </div>
+            </form>
 
-        </div>
+        </section>
 
-        <!-- =================================================
-             RIGHT / ORDER SUMMARY
-        ================================================== -->
+        <aside class="card summary-card">
 
-        <div class="card summary-card">
-
-            <div class="summary-header">
+            <div class="summary-head">
 
                 <h2>
-                    Order Summary
+                    Order summary
                 </h2>
 
                 <p>
-                    <?= count($cart_items) ?>
-                    <?= count($cart_items) === 1 ? "item" : "items" ?>
-                    in your order
+                    <?= $total_quantity ?>
+                    item<?= $total_quantity === 1 ? '' : 's' ?>
+                    in your cart
                 </p>
 
             </div>
@@ -1266,46 +1374,44 @@ body {
 
                 <?php foreach ($cart_items as $item): ?>
 
-                    <div class="order-item">
+                    <div class="summary-item">
 
-                        <?php if (!empty($item["image"])): ?>
+                        <?php if (!empty($item['image'])): ?>
 
                             <img
-                                class="product-image"
-                                src="<?= e($item["image"]) ?>"
-                                alt="<?= e($item["product_name"]) ?>"
-                                onerror="this.style.display='none';"
+                                class="summary-image"
+                                src="<?= e($item['image']) ?>"
+                                alt="<?= e($item['product_name']) ?>"
+                                onerror="this.style.visibility='hidden'"
                             >
 
                         <?php else: ?>
 
-                            <div class="product-image"></div>
+                            <div class="summary-image"></div>
 
                         <?php endif; ?>
 
-                        <div class="product-info">
+                        <div>
 
-                            <div class="product-name">
-
-                                <?= e($item["product_name"]) ?>
-
+                            <div class="summary-name">
+                                <?= e($item['product_name']) ?>
                             </div>
 
-                            <div class="product-meta">
+                            <div class="summary-meta">
 
-                                ₱<?= number_format($item["price"], 2) ?>
+                                ₱<?= number_format($item['price'], 2) ?>
 
                                 ×
 
-                                <?= $item["quantity"] ?>
+                                <?= $item['quantity'] ?>
 
                             </div>
 
                         </div>
 
-                        <div class="product-subtotal">
+                        <div class="summary-price">
 
-                            ₱<?= number_format($item["subtotal"], 2) ?>
+                            ₱<?= number_format($item['subtotal'], 2) ?>
 
                         </div>
 
@@ -1315,45 +1421,55 @@ body {
 
             </div>
 
-            <div class="summary-total">
+            <div class="totals">
 
-                <span class="total-label">
-                    Total
-                </span>
+                <div class="total-row">
 
-                <span class="total-price">
-                    ₱<?= number_format($total_amount, 2) ?>
-                </span>
+                    <span>
+                        Subtotal
+                    </span>
+
+                    <strong>
+                        ₱<?= number_format($total_amount, 2) ?>
+                    </strong>
+
+                </div>
+
+                <div class="total-row">
+
+                    <span>
+                        Shipping
+                    </span>
+
+                    <strong>
+                        Calculated by store
+                    </strong>
+
+                </div>
+
+                <div class="grand-total">
+
+                    <strong>
+                        Order total
+                    </strong>
+
+                    <strong>
+                        ₱<?= number_format($total_amount, 2) ?>
+                    </strong>
+
+                </div>
 
             </div>
 
-            <div class="summary-action">
+            <div class="summary-trust">
 
-                <button
-                    type="button"
-                    class="checkout-button"
-                    onclick="document.getElementById('checkoutForm').requestSubmit();"
-                    id="summaryOrderButton"
-                >
-                    Place Order · ₱<?= number_format($total_amount, 2) ?>
-                </button>
+                <i class="fa-solid fa-shield-halved"></i>
 
-                <a
-                    href="cart.php"
-                    class="back-link"
-                >
-                    Edit Cart
-                </a>
+                Your checkout information is securely submitted.
 
             </div>
 
-            <div class="security-note">
-
-                🔒 Your order information is securely submitted.
-
-            </div>
-
-        </div>
+        </aside>
 
     </div>
 
@@ -1361,294 +1477,302 @@ body {
 
 <script>
 
-/* =========================================================
-   PAYMENT METHOD
-========================================================= */
+const form =
+    document.getElementById('checkoutForm');
 
-function changePaymentMethod() {
+const onlineRadio =
+    document.getElementById('online');
 
-    const onlineRadio =
-        document.getElementById("online");
+const codRadio =
+    document.getElementById('cod');
 
-    const onlineBox =
-        document.getElementById("onlinePaymentBox");
+const onlineBox =
+    document.getElementById('onlineBox');
 
-    const platform =
-        document.getElementById("payment_platform");
+const platform =
+    document.getElementById('payment_platform');
 
-    const receipt =
-        document.getElementById("payment_receipt");
+const receipt =
+    document.getElementById('payment_receipt');
 
-    if (onlineRadio.checked) {
+const instructions =
+    document.getElementById('instructions');
 
-        onlineBox.classList.add("show");
+const messageBox =
+    document.getElementById('checkoutMessage');
 
-        platform.required = true;
+const submitButton =
+    document.getElementById('placeOrderButton');
 
-        receipt.required = true;
+const defaultButtonHtml =
+    submitButton.innerHTML;
 
-    } else {
 
-        onlineBox.classList.remove("show");
+function setMessage(
+    text,
+    type = 'error'
+) {
 
-        platform.required = false;
+    messageBox.textContent = text;
 
-        receipt.required = false;
+    messageBox.className =
+        'message show ' + type;
 
-        platform.value = "";
+    messageBox.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest'
+    });
+}
 
-        receipt.value = "";
 
-        document
-            .getElementById("paymentInstructions")
-            .classList.remove("show");
+function clearMessage() {
+
+    messageBox.textContent = '';
+
+    messageBox.className = 'message';
+}
+
+
+function updatePaymentUI() {
+
+    const isOnline =
+        onlineRadio.checked;
+
+    onlineBox.classList.toggle(
+        'show',
+        isOnline
+    );
+
+    platform.required =
+        isOnline;
+
+    receipt.required =
+        isOnline;
+
+    if (!isOnline) {
+
+        platform.value = '';
+
+        receipt.value = '';
+
+        instructions.textContent = '';
+
+        instructions.classList.remove(
+            'show'
+        );
     }
 }
 
-/* =========================================================
-   PAYMENT PLATFORM
-========================================================= */
 
-function changePaymentPlatform() {
+function updateInstructions() {
 
-    const platform =
-        document.getElementById("payment_platform").value;
+    const copy = {
 
-    const instructions =
-        document.getElementById("paymentInstructions");
+        GCash:
+            'Send the exact order total to the official Siquijor Styles GCash account, then upload the successful payment receipt below.',
 
-    const title =
-        document.getElementById("instructionTitle");
+        Maya:
+            'Send the exact order total to the official Siquijor Styles Maya account, then upload the successful payment receipt below.',
 
-    const text =
-        document.getElementById("instructionText");
+        BDO:
+            'Transfer the exact order total to the official Siquijor Styles BDO account, then upload the successful transfer receipt below.',
 
-    if (platform === "") {
+        BPI:
+            'Transfer the exact order total to the official Siquijor Styles BPI account, then upload the successful transfer receipt below.',
 
-        instructions.classList.remove("show");
+        UnionBank:
+            'Transfer the exact order total to the official Siquijor Styles UnionBank account, then upload the successful transfer receipt below.'
+    };
 
-        return;
-    }
+    if (!copy[platform.value]) {
 
-    instructions.classList.add("show");
-
-    title.textContent =
-        platform + " Payment";
-
-    /*
-     * IMPORTANT:
-     * These instructions intentionally do NOT contain
-     * fake account numbers, QR codes, or bank details.
-     *
-     * Replace the text later with your real store
-     * payment information.
-     */
-
-    if (platform === "GCash") {
-
-        text.textContent =
-            "Open GCash and send the order total to the official Siquijor Styles GCash account. Keep your successful transaction receipt.";
-
-    } else if (platform === "Maya") {
-
-        text.textContent =
-            "Open Maya and send the order total to the official Siquijor Styles Maya account. Keep your successful transaction receipt.";
-
-    } else if (platform === "BDO") {
-
-        text.textContent =
-            "Log in to BDO Online Banking and transfer the order total to the official Siquijor Styles BDO account. Keep your successful transaction receipt.";
-
-    } else if (platform === "BPI") {
-
-        text.textContent =
-            "Log in to BPI Online Banking and transfer the order total to the official Siquijor Styles BPI account. Keep your successful transaction receipt.";
-
-    } else if (platform === "UnionBank") {
-
-        text.textContent =
-            "Log in to UnionBank Online Banking and transfer the order total to the official Siquijor Styles UnionBank account. Keep your successful transaction receipt.";
-
-    }
-
-}
-
-/* =========================================================
-   SUBMIT ORDER
-========================================================= */
-
-async function submitOrder(event) {
-
-    event.preventDefault();
-
-    const form =
-        document.getElementById("checkoutForm");
-
-    const button =
-        document.getElementById("placeOrderButton");
-
-    const summaryButton =
-        document.getElementById("summaryOrderButton");
-
-    const fullName =
-        document.getElementById("full_name").value.trim();
-
-    const email =
-        document.getElementById("email").value.trim();
-
-    const phone =
-        document.getElementById("phone").value.trim();
-
-    const address =
-        document.getElementById("address").value.trim();
-
-    const paymentMethod =
-        document.querySelector(
-            'input[name="payment_method"]:checked'
-        ).value;
-
-    const platform =
-        document.getElementById("payment_platform").value;
-
-    const receipt =
-        document.getElementById("payment_receipt");
-
-    /* DELIVERY VALIDATION */
-
-    if (
-        fullName === "" ||
-        email === "" ||
-        phone === "" ||
-        address === ""
-    ) {
-
-        alert(
-            "Please complete all delivery details."
+        instructions.classList.remove(
+            'show'
         );
 
+        instructions.textContent = '';
+
         return;
     }
 
-    /* ONLINE PAYMENT VALIDATION */
+    instructions.textContent =
+        copy[platform.value];
 
-    if (paymentMethod === "Online Payment") {
+    instructions.classList.add(
+        'show'
+    );
+}
 
-        if (platform === "") {
 
-            alert(
-                "Please select an online payment platform."
+onlineRadio.addEventListener(
+    'change',
+    updatePaymentUI
+);
+
+codRadio.addEventListener(
+    'change',
+    updatePaymentUI
+);
+
+platform.addEventListener(
+    'change',
+    updateInstructions
+);
+
+
+form.addEventListener(
+    'submit',
+    async (event) => {
+
+        event.preventDefault();
+
+        clearMessage();
+
+        if (!form.checkValidity()) {
+
+            form.reportValidity();
+
+            return;
+        }
+
+        const phone =
+            document
+                .getElementById('phone')
+                .value
+                .trim();
+
+        if (
+            !/^[0-9+()\-\s]{7,20}$/.test(phone)
+        ) {
+
+            setMessage(
+                'Please enter a valid phone number.'
             );
 
             return;
         }
 
-        if (receipt.files.length === 0) {
+        if (onlineRadio.checked) {
 
-            alert(
-                "Please upload your payment receipt."
-            );
+            if (!platform.value) {
 
-            return;
+                setMessage(
+                    'Please select an online payment platform.'
+                );
+
+                return;
+            }
+
+            if (!receipt.files.length) {
+
+                setMessage(
+                    'Please upload your payment receipt.'
+                );
+
+                return;
+            }
+
+            if (
+                receipt.files[0].size >
+                5 * 1024 * 1024
+            ) {
+
+                setMessage(
+                    'Payment receipt must not exceed 5 MB.'
+                );
+
+                return;
+            }
         }
-    }
 
-    button.disabled = true;
+        submitButton.disabled = true;
 
-    summaryButton.disabled = true;
-
-    button.textContent =
-        "Processing Order...";
-
-    summaryButton.textContent =
-        "Processing Order...";
-
-    try {
-
-        const formData =
-            new FormData(form);
-
-        const response =
-            await fetch(
-                "php/order_process.php",
-                {
-                    method: "POST",
-                    body: formData,
-                    credentials: "same-origin"
-                }
-            );
-
-        const responseText =
-            await response.text();
-
-        console.log(
-            "Server response:",
-            responseText
-        );
-
-        let result;
+        submitButton.innerHTML =
+            '<i class="fa-solid fa-spinner fa-spin"></i>&nbsp;&nbsp;Processing your order...';
 
         try {
 
-            result =
-                JSON.parse(responseText);
+            const response =
+                await fetch(
+                    'php/order_process.php',
+                    {
+                        method: 'POST',
 
-        } catch (jsonError) {
+                        body:
+                            new FormData(form),
 
-            console.error(
-                "Invalid server response:",
-                responseText
-            );
+                        credentials:
+                            'same-origin'
+                    }
+                );
 
-            throw new Error(
-                "The server returned an invalid response."
-            );
-        }
+            const raw =
+                await response.text();
 
-        if (!result.success) {
+            let result;
 
-            throw new Error(
+            try {
+
+                result =
+                    JSON.parse(raw);
+
+            } catch (_) {
+
+                console.error(
+                    'Invalid response:',
+                    raw
+                );
+
+                throw new Error(
+                    'The server returned an invalid response. Check PHP error logs if this continues.'
+                );
+            }
+
+            if (
+                !response.ok ||
+                !result.success
+            ) {
+
+                throw new Error(
+                    result.message ||
+                    'Unable to place your order.'
+                );
+            }
+
+            setMessage(
                 result.message ||
-                "Unable to place the order."
+                'Order placed successfully!',
+                'success'
             );
+
+            setTimeout(
+                () => {
+                    window.location.href =
+                        'orders.php';
+                },
+                700
+            );
+
+        } catch (error) {
+
+            console.error(error);
+
+            setMessage(
+                error.message ||
+                'Something went wrong while placing your order.'
+            );
+
+            submitButton.disabled =
+                false;
+
+            submitButton.innerHTML =
+                defaultButtonHtml;
         }
-
-        alert(
-            result.message ||
-            "Your order has been placed successfully!"
-        );
-
-        window.location.href =
-            "orders.php";
-
-    } catch (error) {
-
-        console.error(
-            "Checkout error:",
-            error
-        );
-
-        alert(
-            error.message ||
-            "Something went wrong while placing your order."
-        );
-
-        button.disabled = false;
-
-        summaryButton.disabled = false;
-
-        button.textContent =
-            "Place Order";
-
-        summaryButton.textContent =
-            "Place Order · ₱<?= number_format($total_amount, 2) ?>";
     }
-}
+);
 
-/* =========================================================
-   INITIAL STATE
-========================================================= */
 
-changePaymentMethod();
+updatePaymentUI();
 
 </script>
 

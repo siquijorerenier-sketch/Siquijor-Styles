@@ -635,10 +635,9 @@ if (!$result) {
             ×
 
         </button>
-
-        <div class="profile-avatar">
-            ♙
-        </div>
+<div class="profile-avatar">
+    <i class="fa-regular fa-user"></i>
+</div>
 
         <h2 id="profileName">
             Guest User

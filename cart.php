@@ -118,6 +118,10 @@
             rel="stylesheet"
             href="css/style.css">
 
+            <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
 
         <link
             href="https://fonts.googleapis.com/css2?family=Parisienne&family=Playfair+Display:wght@400;500;600;700&family=Poppins:wght@300;400;500;600&display=swap"
@@ -195,25 +199,25 @@
 
             <?php if ($logged_in && $current_user): ?>
 
-                <a
-                    class="header-icon"
-                    href="orders.php"
-                    title="Profile">
+<!-- PROFILE -->
 
-                    ♙
+<a
+    class="header-icon cart-button"
+    href="cart.php"
+    title="Cart"
+    aria-label="Shopping Cart">
 
-                </a>
+    <i class="fa-solid fa-cart-shopping"></i>
 
-            <?php else: ?>
+    <span id="cartCount">
+        <?= $cart_count ?>
+    </span>
 
-                <a
-                    class="header-icon"
-                    href="login.php"
-                    title="Profile">
+</a>
 
-                    ♙
+    <i class="fa-regular fa-user"></i>
 
-                </a>
+</a>
 
             <?php endif; ?>
 
@@ -397,7 +401,10 @@
                 <div class="summary-divider"></div>
 
 
-                <div class="summary-total">
+                <span class="total-label">
+                    Total to Pay
+                </span>
+                <div class="summary-total checkout-summary-total"></div>
 
                     <span>
                         Total
@@ -801,9 +808,9 @@
             </button>
 
 
-            <div class="profile-avatar">
-                ♙
-            </div>
+<div class="profile-avatar">
+    <i class="fa-regular fa-user"></i>
+</div>
 
 
             <?php if ($logged_in && $current_user): ?>

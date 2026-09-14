@@ -1655,6 +1655,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                             name="description"
                         ><?= e($description) ?></textarea>
 
+                        <div class="checkout-tip">
+
+    <i class="fa-solid fa-location-dot"></i>
+
+                    <span>
+                        <strong>Delivery tip:</strong>
+                        Enter your complete address including your barangay,
+                        municipality, and province to help prevent delivery delays.
+                    </span>
+
+                </div>
+
 
                     </div>
 

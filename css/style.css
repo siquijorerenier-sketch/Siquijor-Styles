@@ -2953,3 +2953,420 @@ textarea {
         font-size: 23px;
     }
 }
+
+/* =========================================================
+   PROFILE ICON - MORE NOTICEABLE
+========================================================= */
+
+.header-icon.profile-button {
+    width: 42px;
+    height: 42px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    border: 1px solid rgba(23, 109, 134, 0.25);
+    border-radius: 50%;
+
+    background: #eef7f7;
+
+    color: var(--teal);
+
+    font-size: 20px;
+
+    transition:
+        background 0.25s ease,
+        color 0.25s ease,
+        transform 0.25s ease,
+        border-color 0.25s ease,
+        box-shadow 0.25s ease;
+}
+
+.header-icon.profile-button:hover {
+    background: var(--teal);
+    color: #ffffff;
+
+    border-color: var(--teal);
+
+    transform: translateY(-2px);
+
+    box-shadow:
+        0 5px 15px rgba(23, 109, 134, 0.20);
+}
+
+.header-icon.profile-button i {
+    pointer-events: none;
+}
+
+
+/* =========================================================
+   ORDER CANCELLATION WARNING
+========================================================= */
+
+.order-warning {
+    margin-top: 22px;
+
+    padding: 18px 20px;
+
+    border-radius: 14px;
+
+    background: #fff8e8;
+
+    border: 1px solid #f0d58a;
+
+    color: #755b18;
+}
+
+.order-warning.locked {
+    background: #fff1f1;
+
+    border-color: #e4b4b4;
+
+    color: #7a2929;
+}
+
+.order-warning-header {
+    display: flex;
+
+    align-items: flex-start;
+
+    gap: 12px;
+}
+
+.order-warning-icon {
+    width: 38px;
+    height: 38px;
+
+    flex-shrink: 0;
+
+    border-radius: 50%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: #f4d477;
+
+    color: #664d09;
+
+    font-size: 16px;
+}
+
+.order-warning.locked .order-warning-icon {
+    background: #e7b6b6;
+
+    color: #722424;
+}
+
+.order-warning-content {
+    flex: 1;
+}
+
+.order-warning-title {
+    margin: 0 0 5px;
+
+    font-size: 14px;
+
+    font-weight: 700;
+}
+
+.order-warning-text {
+    margin: 0;
+
+    font-size: 12px;
+
+    line-height: 1.6;
+}
+
+.order-countdown {
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+    margin-top: 12px;
+
+    padding: 8px 12px;
+
+    border-radius: 8px;
+
+    background: rgba(255, 255, 255, 0.65);
+
+    font-size: 12px;
+
+    font-weight: 700;
+
+    letter-spacing: 0.2px;
+}
+
+.order-countdown i {
+    font-size: 12px;
+}
+
+
+/* =========================================================
+   CANCEL BUTTON
+========================================================= */
+
+.cancel-order-form {
+    margin-top: 15px;
+}
+
+.cancel-order-button {
+    border: 1px solid #d17a7a;
+
+    background: #ffffff;
+
+    color: #a33a3a;
+
+    padding: 10px 16px;
+
+    border-radius: 9px;
+
+    font-family: inherit;
+
+    font-size: 12px;
+
+    font-weight: 600;
+
+    transition:
+        background 0.2s ease,
+        color 0.2s ease,
+        transform 0.2s ease;
+}
+
+.cancel-order-button:hover {
+    background: #a33a3a;
+
+    color: #ffffff;
+
+    transform: translateY(-1px);
+}
+
+.cancel-order-button.locked {
+    cursor: not-allowed;
+
+    border-color: #d5d5d5;
+
+    background: #eeeeee;
+
+    color: #8a8a8a;
+}
+
+.cancel-order-button.locked:hover {
+    transform: none;
+
+    background: #eeeeee;
+
+    color: #8a8a8a;
+}
+
+
+/* =========================================================
+   CHECKOUT UI IMPROVEMENTS
+========================================================= */
+
+.checkout-header {
+    box-shadow:
+        0 4px 20px rgba(0, 0, 0, 0.12);
+}
+
+.checkout-header .brand {
+    font-family: "Playfair Display", serif;
+
+    font-size: 23px;
+
+    letter-spacing: 0.2px;
+}
+
+.checkout-header .secure-checkout {
+    padding: 8px 13px;
+
+    border: 1px solid rgba(255, 255, 255, 0.15);
+
+    border-radius: 20px;
+
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.checkout-card-highlight {
+    border: 1px solid #dfe8e7;
+
+    background:
+        linear-gradient(
+            180deg,
+            #ffffff 0%,
+            #fcfefe 100%
+        );
+}
+
+.checkout-progress {
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    margin-bottom: 25px;
+
+    color: #718083;
+
+    font-size: 11px;
+
+    font-weight: 600;
+}
+
+.checkout-progress-step {
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+}
+
+.checkout-progress-number {
+    width: 24px;
+    height: 24px;
+
+    border-radius: 50%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: var(--teal);
+
+    color: #ffffff;
+
+    font-size: 11px;
+
+    font-weight: 700;
+}
+
+.checkout-progress-line {
+    width: 35px;
+
+    height: 1px;
+
+    background: #d8dddd;
+}
+
+.checkout-tip {
+    display: flex;
+
+    align-items: flex-start;
+
+    gap: 10px;
+
+    margin-top: 15px;
+
+    padding: 12px 14px;
+
+    border-radius: 10px;
+
+    background: #f2f8f7;
+
+    border: 1px solid #d8e9e6;
+
+    color: #4d696e;
+
+    font-size: 11px;
+
+    line-height: 1.6;
+}
+
+.checkout-tip i {
+    color: var(--teal);
+
+    margin-top: 2px;
+}
+
+.checkout-summary-total {
+    padding: 17px 0;
+
+    margin-top: 5px;
+
+    border-top: 1px solid #e6e6e6;
+
+    border-bottom: 1px solid #e6e6e6;
+}
+
+.checkout-summary-total .total-price {
+    font-size: 24px;
+
+    font-weight: 700;
+
+    color: var(--teal);
+}
+
+.checkout-place-button {
+    width: 100%;
+
+    min-height: 52px;
+
+    border-radius: 11px;
+
+    background: var(--orange);
+
+    color: #ffffff;
+
+    border: none;
+
+    font-size: 13px;
+
+    font-weight: 700;
+
+    letter-spacing: 0.2px;
+
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease,
+        opacity 0.2s ease;
+}
+
+.checkout-place-button:hover {
+    transform: translateY(-2px);
+
+    box-shadow:
+        0 8px 18px rgba(223, 146, 39, 0.25);
+}
+
+.checkout-place-button:disabled {
+    opacity: 0.65;
+
+    cursor: wait;
+
+    transform: none;
+
+    box-shadow: none;
+}
+
+
+/* =========================================================
+   RESPONSIVE PROFILE
+========================================================= */
+
+@media (max-width: 700px) {
+
+    .header-icon.profile-button {
+        width: 38px;
+        height: 38px;
+
+        font-size: 18px;
+    }
+
+    .order-warning {
+        padding: 15px;
+    }
+
+    .order-warning-header {
+        gap: 9px;
+    }
+
+    .checkout-progress {
+        flex-wrap: wrap;
+    }
+
+}

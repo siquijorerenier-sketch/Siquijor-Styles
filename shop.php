@@ -434,18 +434,19 @@ function e($value)
 
 
         <!-- PROFILE -->
+<a
+    class="header-icon profile-button"
+    href="<?= $logged_in
+        ? 'orders.php'
+        : 'login.php'
+    ?>"
+    title="My Profile"
+    aria-label="My Profile"
+>
 
-        <a
-            class="header-icon"
-            href="<?= $logged_in
-                ? 'orders.php'
-                : 'login.php'
-            ?>"
-            title="Profile">
+    <i class="fa-regular fa-user"></i>
 
-            <i class="fa-regular fa-user"></i>
-
-        </a>
+</a>
 
 
         <!-- CART -->
