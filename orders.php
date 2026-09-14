@@ -1531,92 +1531,28 @@ $server_now = time();
 
 <header class="header">
 
-    <a
-        href="index.php"
-        class="logo-area"
-    >
-
-        <img
-            src="images/logo.png"
-            alt="Siquijor Styles"
-            style="
-                max-width:100%;
-                max-height:55px;
-                object-fit:contain;
-            "
-            onerror="
-                this.style.display='none';
-                this.parentElement.innerHTML=
-                '<strong style=\"font-family:Playfair Display,serif;font-size:20px;color:#176d86;\">Siquijor Styles</strong>';
-            "
-        >
-
-    </a>
+    <div class="logo-area">
+        <a href="index.php">
+            <img
+                src="images/logo.png"
+                alt="Siquijor Styles"
+                style="max-width:100%; max-height:55px; object-fit:contain;"
+            >
+        </a>
+    </div>
 
     <nav class="navigation">
-
-        <a href="index.php">
-            HOME
-        </a>
-
-        <a href="shop.php">
-            SHOP
-        </a>
-
-        <a href="about.php">
-            ABOUT
-        </a>
-
-        <a href="contact.php">
-            CONTACT
-        </a>
-
-        <a
-            href="orders.php"
-            class="active"
-        >
-            ORDERS
-        </a>
-
+        <a href="index.php">Home</a>
+        <a href="shop.php">Shop</a>
+        <a href="index.php#collections">Collections <span>⌄</span></a>
+        <a href="about.php">About</a>
+        <a href="contact.php">Contact</a>
+        <a href="cart.php">Cart</a>
+        <a href="orders.php" class="active">My Orders</a>
     </nav>
 
     <div class="header-tools">
-
-        <!-- PROFILE -->
-
-        <a
-            class="header-icon profile-button"
-            href="orders.php"
-            title="My Profile"
-            aria-label="My Profile"
-        >
-
-            <i class="fa-regular fa-user"></i>
-
-        </a>
-
-        <!-- CART -->
-
-        <a
-            href="cart.php"
-            class="header-icon cart-button"
-            aria-label="Cart"
-            title="Cart"
-        >
-
-            <i class="fa-solid fa-bag-shopping"></i>
-
-        </a>
-
-        <!-- LOGOUT -->
-
-        <a
-            href="logout.php"
-            class="login-button"
-        >
-            LOGOUT
-        </a>
-
+        <a href="logout.php" class="login-button">Log Out</a>
     </div>
 
 </header>

@@ -400,182 +400,32 @@ function e($value)
 
 <header class="header">
 
-
-    <!-- LOGO -->
-
     <div class="logo-area">
-
         <a href="index.php">
-
-            <img
-                src="images/logo.png"
-                alt="Siquijor Styles"
-            >
-
+            <img src="images/logo.png" alt="Siquijor Styles">
         </a>
-
     </div>
 
-
-    <!-- NAVIGATION -->
-
     <nav class="navigation">
-
-
-        <a
-            href="index.php"
-            class="active"
-        >
-
-            Home
-
-        </a>
-
-
-        <a href="shop.php">
-
-            Shop
-
-        </a>
-
-
-        <a href="#collections">
-
-            Collections
-
-            <span>⌄</span>
-
-        </a>
-
-
-        <a href="about.php">
-
-            About
-
-        </a>
-
-
-        <a href="contact.php">
-
-            Contact
-
-        </a>
-
-
+        <a href="index.php" class="active">Home</a>
+        <a href="shop.php">Shop</a>
+        <a href="#collections">Collections <span>⌄</span></a>
+        <a href="about.php">About</a>
+        <a href="contact.php">Contact</a>
+        <a href="cart.php">Cart</a>
+        <?php if ($logged_in): ?>
+            <a href="orders.php">My Orders</a>
+        <?php endif; ?>
     </nav>
 
-
-    <!-- HEADER TOOLS -->
-
     <div class="header-tools">
-
-
-        <!-- SEARCH -->
-
-        <button
-            class="header-icon"
-            type="button"
-            onclick="openSearch()"
-            title="Search"
-        >
-
-            <i class="fa-solid fa-magnifying-glass"></i>
-
-        </button>
-
-
-        <!-- PROFILE -->
-
-<a
-    class="header-icon profile-button"
-    href="<?= $logged_in
-        ? 'orders.php'
-        : 'login.php'
-    ?>"
-    title="My Profile"
-    aria-label="My Profile"
->
-
-    <i class="fa-regular fa-user"></i>
-
-</a>
-
-
-        <!-- CART -->
-
-        <a
-            class="header-icon cart-button"
-            href="cart.php"
-            title="Cart"
-        >
-
-            <i class="fa-solid fa-bag-shopping"></i>
-
-            <span id="cartCount">
-
-                <?= $cart_count ?>
-
-            </span>
-
-        </a>
-
-
-        <!-- ACCOUNT -->
-
-        <?php if (
-            $logged_in &&
-            $current_user
-        ): ?>
-
-
-            <a
-                class="login-button"
-                href="orders.php"
-            >
-
-                <?= e(
-                    $current_user["full_name"]
-                ) ?>
-
-            </a>
-
-
-            <a
-                class="signup-button"
-                href="logout.php"
-            >
-
-                Log Out
-
-            </a>
-
-
+        <?php if ($logged_in && $current_user): ?>
+            <a class="login-button" href="orders.php"><?= e($current_user["full_name"]) ?></a>
+            <a class="signup-button" href="logout.php">Log Out</a>
         <?php else: ?>
-
-
-            <a
-                class="login-button"
-                href="login.php"
-            >
-
-                Log In
-
-            </a>
-
-
-            <a
-                class="signup-button"
-                href="signup.php"
-            >
-
-                Sign Up
-
-            </a>
-
-
+            <a class="login-button" href="login.php">Log In</a>
+            <a class="signup-button" href="signup.php">Sign Up</a>
         <?php endif; ?>
-
-
     </div>
 
 </header>

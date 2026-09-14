@@ -139,154 +139,35 @@
 
     <header class="header">
 
+    <div class="logo-area">
+        <a href="index.php">
+            SIQUIJOR STYLES
+        </a>
+    </div>
 
-        <div class="logo-area">
+    <nav class="navigation">
+        <a href="index.php">Home</a>
+        <a href="shop.php">Shop</a>
+        <a href="index.php#collections">Collections <span>⌄</span></a>
+        <a href="about.php">About</a>
+        <a href="contact.php">Contact</a>
+        <a href="cart.php" class="active">Cart</a>
+        <?php if ($logged_in): ?>
+            <a href="orders.php">My Orders</a>
+        <?php endif; ?>
+    </nav>
 
-            <a href="index.php">
-                SIQUIJOR STYLES
-            </a>
+    <div class="header-tools">
+        <?php if ($logged_in && $current_user): ?>
+            <a class="login-button" href="orders.php"><?= htmlspecialchars($current_user["full_name"]) ?></a>
+            <a class="signup-button" href="logout.php">Log Out</a>
+        <?php else: ?>
+            <a class="login-button" href="login.php">Log In</a>
+            <a class="signup-button" href="signup.php">Sign Up</a>
+        <?php endif; ?>
+    </div>
 
-        </div>
-
-
-        <nav class="navigation">
-
-            <a href="index.php">
-                Home
-            </a>
-
-
-            <a href="shop.php">
-                Shop
-            </a>
-
-
-            <a href="index.php#collections">
-                Collections
-                <span>⌄</span>
-            </a>
-
-
-            <a href="about.php">
-                About
-            </a>
-
-
-            <a href="contact.php">
-                Contact
-            </a>
-
-        </nav>
-
-
-        <div class="header-tools">
-
-
-            <!-- SEARCH -->
-
-            <button
-                class="header-icon"
-                type="button"
-                onclick="openSearch()"
-                title="Search">
-
-                ⌕
-
-            </button>
-
-
-            <!-- PROFILE -->
-
-            <?php if ($logged_in && $current_user): ?>
-
-<!-- PROFILE -->
-
-<a
-    class="header-icon cart-button"
-    href="cart.php"
-    title="Cart"
-    aria-label="Shopping Cart">
-
-    <i class="fa-solid fa-cart-shopping"></i>
-
-    <span id="cartCount">
-        <?= $cart_count ?>
-    </span>
-
-</a>
-
-    <i class="fa-regular fa-user"></i>
-
-</a>
-
-            <?php endif; ?>
-
-
-            <!-- CART -->
-
-            <a
-                class="header-icon cart-button"
-                href="cart.php"
-                title="Cart">
-
-                🛒
-
-                <span id="cartCount">
-                    <?= $cart_count ?>
-                </span>
-
-            </a>
-
-
-            <!-- LOGIN / ACCOUNT -->
-
-            <?php if ($logged_in && $current_user): ?>
-
-                <a
-                    class="login-button"
-                    href="orders.php">
-
-                    <?= htmlspecialchars(
-                        $current_user["full_name"]
-                    ) ?>
-
-                </a>
-
-
-                <a
-                    class="signup-button"
-                    href="logout.php">
-
-                    Log Out
-
-                </a>
-
-
-            <?php else: ?>
-
-                <a
-                    class="login-button"
-                    href="login.php">
-
-                    Log In
-
-                </a>
-
-
-                <a
-                    class="signup-button"
-                    href="signup.php">
-
-                    Sign Up
-
-                </a>
-
-            <?php endif; ?>
-
-
-        </div>
-
-    </header>
+</header>
 
 
 
@@ -401,11 +282,7 @@
                 <div class="summary-divider"></div>
 
 
-                <span class="total-label">
-                    Total to Pay
-                </span>
-                <div class="summary-total checkout-summary-total"></div>
-
+                <div class="summary-total checkout-summary-total">
                     <span>
                         Total
                     </span>
@@ -413,7 +290,6 @@
                     <strong id="cartPageTotal">
                         ₱0.00
                     </strong>
-
                 </div>
 
 
@@ -920,11 +796,7 @@
     <!-- ==================================================
         DATABASE CART PAGE JAVASCRIPT
     ================================================== -->
-
-    <script src="js/script.js"></script>
-
-
-    <script>
+<script>
 
 
     /* ==================================================
