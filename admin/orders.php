@@ -1893,63 +1893,85 @@ $admin_name =
          SIDEBAR
     ====================================================== -->
 
-   <aside class="sidebar">
+    <aside class="sidebar">
 
-    <div class="sidebar-logo">
-        <img src="../images/logo.png" alt="Siquijor Styles">
-    </div>
 
-    <div class="admin-badge">
-        <strong><?= e($admin_name) ?></strong>
-        <span>Administrator</span>
-    </div>
+        <div class="sidebar-logo">
 
-    <div class="nav-title">
-        Management
-    </div>
+            <img
+                src="../images/logo.png"
+                alt="Siquijor Styles"
+            >
 
-    <nav class="admin-nav">
+        </div>
 
-        <a href="http://localhost/Website/admin/index.php">
-            <span class="nav-icon">⌂</span>
-            Dashboard
-        </a>
 
-        <a href="http://localhost/Website/admin/products.php">
-            <span class="nav-icon">▣</span>
-            Products
-        </a>
+        <div class="admin-badge">
 
-        <a href="http://localhost/Website/admin/users.php">
-            <span class="nav-icon">♙</span>
-            Customers
-        </a>
+            <strong>
+                <?= e($admin_name) ?>
+            </strong>
 
-        <a href="http://localhost/Website/admin/orders.php">
-            <span class="nav-icon">▤</span>
-            Orders
-        </a>
+            <span>
+                Administrator
+            </span>
 
-    </nav>
+        </div>
 
-    <div class="sidebar-bottom">
 
-        <a
-            href="http://localhost/Website/index.php"
-            class="logout-link">
-            View Website
-        </a>
+        <div class="nav-title">
+            Management
+        </div>
 
-        <a
-            href="http://localhost/Website/admin/logout.php"
-            class="logout-link"
-            style="margin-top: 8px;">
-            Log Out
-        </a>
 
-    </div>
+        <nav class="admin-nav">
 
-</aside>
+            <a href="index.php">
+                <span class="nav-icon">⌂</span>
+                <span>Dashboard</span>
+            </a>
+
+            <a href="products.php">
+                <span class="nav-icon">▣</span>
+                <span>Products</span>
+            </a>
+
+            <a href="users.php">
+                <span class="nav-icon">♙</span>
+                <span>Customers</span>
+            </a>
+
+            <a href="orders.php" class="active">
+                <span class="nav-icon">▤</span>
+                <span>Orders</span>
+            </a>
+
+        </nav>
+
+
+        <div class="sidebar-bottom">
+
+
+            <a
+                href="../index.php"
+                class="bottom-link"
+            >
+                View Website
+            </a>
+
+
+            <a
+                href="logout.php"
+                class="bottom-link"
+            >
+                Log Out
+            </a>
+
+
+        </div>
+
+
+    </aside>
 
 
     <!-- =====================================================

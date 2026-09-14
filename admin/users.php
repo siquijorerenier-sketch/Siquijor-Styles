@@ -1,6 +1,6 @@
 <?php
 
-session_start();
+require_once __DIR__ . "/../php/session.php";
 
 require_once "../php/database.php";
 
@@ -332,9 +332,9 @@ $admin_name = $_SESSION["full_name"] ?? "Administrator";
         }
 
 
-        .sidebar-bottom {
+        .sidebar-actions {
 
-            margin-top: auto;
+            margin-top: 24px;
 
             padding-top: 20px;
         }
@@ -743,7 +743,7 @@ $admin_name = $_SESSION["full_name"] ?? "Administrator";
             }
 
 
-            .sidebar-bottom {
+            .sidebar-actions {
 
                 margin-top: 15px;
             }
@@ -807,61 +807,100 @@ $admin_name = $_SESSION["full_name"] ?? "Administrator";
 
     <aside class="sidebar">
 
-    <div class="sidebar-logo">
-        <img src="../images/logo.png" alt="Siquijor Styles">
-    </div>
 
-    <div class="admin-badge">
-        <strong><?= e($admin_name) ?></strong>
-        <span>Administrator</span>
-    </div>
+        <div class="sidebar-logo">
 
-    <div class="nav-title">
-        Management
-    </div>
+            <img
+                src="../images/logo.png"
+                alt="Siquijor Styles"
+            >
 
-    <nav class="admin-nav">
+        </div>
 
-        <a href="http://localhost/Website/admin/index.php">
-            <span class="nav-icon">⌂</span>
-            Dashboard
-        </a>
 
-        <a href="http://localhost/Website/admin/products.php">
-            <span class="nav-icon">▣</span>
-            Products
-        </a>
+        <div class="admin-badge">
 
-        <a href="http://localhost/Website/admin/users.php">
-            <span class="nav-icon">♙</span>
-            Customers
-        </a>
+            <strong>
+                <?= e($admin_name) ?>
+            </strong>
 
-        <a href="http://localhost/Website/admin/orders.php">
-            <span class="nav-icon">▤</span>
-            Orders
-        </a>
+            <span>
+                Administrator
+            </span>
 
-    </nav>
+        </div>
 
-    <div class="sidebar-bottom">
 
-        <a
-            href="http://localhost/Website/index.php"
-            class="logout-link">
-            View Website
-        </a>
+        <div class="nav-title">
+            Management
+        </div>
 
-        <a
-            href="http://localhost/Website/admin/logout.php"
-            class="logout-link"
-            style="margin-top: 8px;">
-            Log Out
-        </a>
 
-    </div>
+        <nav class="admin-nav">
 
-</aside>
+
+            <a href="index.php">
+
+                <span class="nav-icon">⌂</span>
+
+                Dashboard
+
+            </a>
+
+
+            <a href="products.php">
+
+                <span class="nav-icon">▣</span>
+
+                Products
+
+            </a>
+
+
+            <a
+                href="users.php"
+                class="active"
+            >
+
+                <span class="nav-icon">♙</span>
+
+                Customers
+
+            </a>
+
+
+            <a href="orders.php">
+
+                <span class="nav-icon">▤</span>
+
+                Orders
+
+            </a>
+
+
+        </nav>
+
+
+        <div class="sidebar-actions">
+
+            <a
+                href="http://localhost/Website/index.php"
+                class="bottom-link"
+            >
+                View Website
+            </a>
+
+            <a
+                href="logout.php"
+                class="bottom-link"
+            >
+                Log Out
+            </a>
+
+        </div>
+
+
+    </aside>
 
 
     <!-- =====================================================
@@ -885,17 +924,7 @@ $admin_name = $_SESSION["full_name"] ?? "Administrator";
                 </p>
 
             </div>
-
-
-            <a
-                href="../index.php"
-                class="view-site"
-            >
-                View Store →
-            </a>
-
-
-        </div>
+</div>
 
 
         <!-- =================================================
