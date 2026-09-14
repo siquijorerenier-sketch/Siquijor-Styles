@@ -1,8 +1,7 @@
 <?php
 
-session_start();
-
-require_once "php/database.php";
+require_once __DIR__ . "/php/session.php";
+require_once __DIR__ . "/php/database.php";
 
 header("Content-Type: text/html; charset=UTF-8");
 
@@ -47,6 +46,7 @@ if ($logged_in) {
 
             $current_user =
                 $user_result->fetch_assoc();
+
         }
 
         $user_stmt->close();

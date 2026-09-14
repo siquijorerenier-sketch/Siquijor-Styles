@@ -520,39 +520,7 @@ function statusClass($status)
         }
 
 
-        .view-site {
-
-            display: inline-flex;
-
-            align-items: center;
-
-            justify-content: center;
-
-            padding: 11px 16px;
-
-            border-radius: 9px;
-
-            background: #ffffff;
-
-            border: 1px solid #ded5cc;
-
-            color: #51483f;
-
-            text-decoration: none;
-
-            font-size: 13px;
-
-            font-weight: 600;
-        }
-
-
-        .view-site:hover {
-
-            background: #faf7f3;
-        }
-
-
-        /* =================================================
+                /* =================================================
            STAT CARDS
         ================================================= */
 
@@ -1118,63 +1086,95 @@ function statusClass($status)
          SIDEBAR
     ====================================================== -->
 
-<aside class="sidebar">
+    <aside class="sidebar">
 
-    <div class="sidebar-logo">
-        <img src="../images/logo.png" alt="Siquijor Styles">
-    </div>
+        <div class="sidebar-logo">
 
-    <div class="admin-badge">
-        <strong><?= e($admin_name) ?></strong>
-        <span>Administrator</span>
-    </div>
+            <img
+                src="../images/logo.png"
+                alt="Siquijor Styles"
+            >
 
-    <div class="nav-title">
-        Management
-    </div>
+        </div>
 
-    <nav class="admin-nav">
 
-        <a href="http://localhost/Website/admin/index.php">
-            <span class="nav-icon">⌂</span>
-            Dashboard
-        </a>
+        <div class="admin-badge">
 
-        <a href="http://localhost/Website/admin/products.php">
-            <span class="nav-icon">▣</span>
-            Products
-        </a>
+            <strong>
+                <?= e($admin_name) ?>
+            </strong>
 
-        <a href="http://localhost/Website/admin/users.php">
-            <span class="nav-icon">♙</span>
-            Customers
-        </a>
+            <span>
+                Administrator
+            </span>
 
-        <a href="http://localhost/Website/admin/orders.php">
-            <span class="nav-icon">▤</span>
-            Orders
-        </a>
+        </div>
 
-    </nav>
 
-    <div class="sidebar-bottom">
+        <div class="nav-title">
+            Management
+        </div>
 
-        <a
-            href="http://localhost/Website/index.php"
-            class="logout-link">
-            View Website
-        </a>
 
-        <a
-            href="http://localhost/Website/admin/logout.php"
-            class="logout-link"
-            style="margin-top: 8px;">
-            Log Out
-        </a>
+        <nav class="admin-nav">
 
-    </div>
+            <a
+                href="index.php"
+                class="active"
+            >
+                <span class="nav-icon">⌂</span>
+                Dashboard
+            </a>
 
-</aside>
+
+            <a href="products.php">
+
+                <span class="nav-icon">▣</span>
+                Products
+
+            </a>
+
+
+            <a href="users.php">
+
+                <span class="nav-icon">♙</span>
+                Customers
+
+            </a>
+
+
+            <a href="orders.php">
+
+                <span class="nav-icon">▤</span>
+                Orders
+
+            </a>
+
+        </nav>
+
+
+        <div class="sidebar-bottom">
+
+            <a
+                href="../index.php"
+                class="logout-link"
+            >
+                View Website
+            </a>
+
+
+            <a
+                href="logout.php"
+                class="logout-link"
+                style="margin-top: 8px;"
+            >
+                Log Out
+            </a>
+
+        </div>
+
+    </aside>
+
 
     <!-- =====================================================
          MAIN CONTENT
@@ -1202,12 +1202,6 @@ function statusClass($status)
             </div>
 
 
-            <a
-                href="../index.php"
-                class="view-site"
-            >
-                View Website →
-            </a>
 
         </div>
 
