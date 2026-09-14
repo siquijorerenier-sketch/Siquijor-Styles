@@ -863,26 +863,25 @@ if ($logged_in) {
 
     </div>
 
+<div class="footer-column">
 
-    <div class="footer-column">
+    <h4>
+        QUICK LINKS
+    </h4>
 
-        <h4>
-            QUICK LINKS
-        </h4>
+    <a href="privacy.php">
+        Privacy Policy
+    </a>
 
-        <a href="#">
-            Privacy Policy
-        </a>
+    <a href="terms.php">
+        Terms & Conditions
+    </a>
 
-        <a href="#">
-            Terms & Conditions
-        </a>
+    <a href="#">
+        Shipping Information
+    </a>
 
-        <a href="#">
-            Shipping Information
-        </a>
-
-    </div>
+</div>
 
 
     <div class="footer-column">

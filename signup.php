@@ -27,10 +27,6 @@ header("Content-Type: text/html; charset=UTF-8");
 
     <style>
 
-        /* ==================================================
-           SIGN UP PAGE
-        ================================================== */
-
         * {
             box-sizing: border-box;
         }
@@ -254,6 +250,45 @@ header("Content-Type: text/html; charset=UTF-8");
 
 
         /* ==================================================
+           TERMS & PRIVACY
+        ================================================== */
+
+        .signup-terms {
+            display: flex;
+            align-items: flex-start;
+            gap: 9px;
+            margin-top: 1px;
+            color: #7b8b8e;
+            font-size: 8.5px;
+            line-height: 1.6;
+        }
+
+        .signup-terms input {
+            width: 14px;
+            height: 14px;
+            margin: 1px 0 0;
+            flex-shrink: 0;
+            accent-color: #285c60;
+            cursor: pointer;
+        }
+
+        .signup-terms label {
+            cursor: pointer;
+        }
+
+        .signup-terms a {
+            color: #285c60;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .signup-terms a:hover {
+            color: #d48749;
+            text-decoration: underline;
+        }
+
+
+        /* ==================================================
            SUBMIT BUTTON
         ================================================== */
 
@@ -279,6 +314,12 @@ header("Content-Type: text/html; charset=UTF-8");
 
         .signup-submit:active {
             transform: translateY(0);
+        }
+
+        .signup-submit:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
         }
 
 
@@ -361,6 +402,7 @@ header("Content-Type: text/html; charset=UTF-8");
                 height: 280px;
                 right: -170px;
             }
+
         }
 
     </style>
@@ -370,6 +412,10 @@ header("Content-Type: text/html; charset=UTF-8");
 
 <body class="signup-page">
 
+
+<!-- ==================================================
+     HEADER
+================================================== -->
 
 <header class="signup-header">
 
@@ -409,6 +455,10 @@ header("Content-Type: text/html; charset=UTF-8");
 </header>
 
 
+<!-- ==================================================
+     MAIN
+================================================== -->
+
 <main class="signup-main">
 
     <div class="signup-shape-left"></div>
@@ -418,38 +468,56 @@ header("Content-Type: text/html; charset=UTF-8");
 
     <section class="signup-card">
 
+
         <div class="signup-eyebrow">
+
             JOIN THE ISLAND STYLE
+
         </div>
 
 
         <h1>
+
             Create Account
+
         </h1>
 
 
         <div class="signup-script">
+
             Welcome to Siquijor Styles
+
         </div>
 
 
         <p class="signup-description">
+
             Create your account and discover
             island-inspired fashion made for
             everyday life.
+
         </p>
 
+
+        <!-- ==================================================
+             SIGN UP FORM
+        ================================================== -->
 
         <form
             id="signupForm"
             class="signup-form"
-            onsubmit="signup(event)">
+            onsubmit="signup(event)"
+        >
 
+
+            <!-- FULL NAME -->
 
             <div class="signup-field">
 
                 <label for="signupName">
+
                     FULL NAME
+
                 </label>
 
                 <input
@@ -458,15 +526,20 @@ header("Content-Type: text/html; charset=UTF-8");
                     name="full_name"
                     placeholder="Enter your full name"
                     autocomplete="name"
-                    required>
+                    required
+                >
 
             </div>
 
 
+            <!-- EMAIL -->
+
             <div class="signup-field">
 
                 <label for="signupEmail">
+
                     EMAIL ADDRESS
+
                 </label>
 
                 <input
@@ -475,15 +548,20 @@ header("Content-Type: text/html; charset=UTF-8");
                     name="email"
                     placeholder="Enter your email"
                     autocomplete="email"
-                    required>
+                    required
+                >
 
             </div>
 
 
+            <!-- PASSWORD -->
+
             <div class="signup-field">
 
                 <label for="signupPassword">
+
                     PASSWORD
+
                 </label>
 
                 <input
@@ -493,20 +571,27 @@ header("Content-Type: text/html; charset=UTF-8");
                     placeholder="Create a password"
                     autocomplete="new-password"
                     minlength="6"
-                    required>
+                    required
+                >
 
             </div>
 
 
             <div class="signup-password-note">
+
                 Password must contain at least 6 characters.
+
             </div>
 
+
+            <!-- CONFIRM PASSWORD -->
 
             <div class="signup-field">
 
                 <label for="signupConfirm">
+
                     CONFIRM PASSWORD
+
                 </label>
 
                 <input
@@ -516,14 +601,63 @@ header("Content-Type: text/html; charset=UTF-8");
                     placeholder="Confirm your password"
                     autocomplete="new-password"
                     minlength="6"
-                    required>
+                    required
+                >
 
             </div>
 
 
+            <!-- ==================================================
+                 TERMS & PRIVACY AGREEMENT
+            ================================================== -->
+
+            <div class="signup-terms">
+
+                <input
+                    type="checkbox"
+                    id="agreeTerms"
+                    name="agree_terms"
+                    value="1"
+                    required
+                >
+
+                <label for="agreeTerms">
+
+                    I agree to the
+
+                    <a
+                        href="terms.php"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+
+                        Terms &amp; Conditions
+
+                    </a>
+
+                    and
+
+                    <a
+                        href="privacy.php"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+
+                        Privacy Policy
+
+                    </a>.
+
+                </label>
+
+            </div>
+
+
+            <!-- SUBMIT -->
+
             <button
                 type="submit"
-                class="signup-submit">
+                class="signup-submit"
+            >
 
                 CREATE ACCOUNT
 
@@ -533,16 +667,22 @@ header("Content-Type: text/html; charset=UTF-8");
         </form>
 
 
+        <!-- LOGIN LINK -->
+
         <p class="signup-login-text">
 
             Already have an account?
 
             <a href="login.php">
+
                 Log in here
+
             </a>
 
         </p>
 
+
+        <!-- FOOTER NOTE -->
 
         <div class="signup-footer-note">
 
@@ -551,12 +691,16 @@ header("Content-Type: text/html; charset=UTF-8");
 
         </div>
 
+
     </section>
 
 </main>
 
 
+<!-- JAVASCRIPT -->
+
 <script src="js/script.js"></script>
+
 
 </body>
 

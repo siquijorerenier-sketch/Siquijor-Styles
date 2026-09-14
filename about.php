@@ -831,14 +831,14 @@ if ($logged_in) {
         </h4>
 
 
-        <a href="#">
+        <a href="privacy.php">
 
             Privacy Policy
 
         </a>
 
 
-        <a href="#">
+        <a href="terms.php">
 
             Terms & Conditions
 

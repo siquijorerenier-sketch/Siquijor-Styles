@@ -2172,6 +2172,32 @@ function e($value)
     </div>
 
 
+
+    <!-- =====================================================
+         LEGAL
+    ====================================================== -->
+
+    <div class="footer-column">
+
+
+        <h4>
+            LEGAL
+        </h4>
+
+
+        <a href="privacy-policy.php">
+            Privacy Policy
+        </a>
+
+
+        <a href="terms-conditions.php">
+            Terms &amp; Conditions
+        </a>
+
+
+    </div>
+
+
 </footer>
 
 
@@ -2182,8 +2208,25 @@ function e($value)
     Siquijor Styles.
     All rights reserved.
 
-</div>
+    <span style="margin: 0 8px;">|</span>
 
+    <a
+        href="privacy-policy.php"
+        style="text-decoration: none;"
+    >
+        Privacy Policy
+    </a>
+
+    <span style="margin: 0 8px;">|</span>
+
+    <a
+        href="terms-conditions.php"
+        style="text-decoration: none;"
+    >
+        Terms &amp; Conditions
+    </a>
+
+</div>
 
 
 <!-- =========================================================
